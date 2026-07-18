@@ -1,12 +1,12 @@
 """
-Gestione della quarantena per file HSD.
+Quarantine management for HSD files.
 
-Quando un file viene identificato come contenente HSD con score
-superiore alla soglia, viene copiato in quarantena con un report
-dei match e NON viene registrato nel grafo.
+When a file is identified as containing HSD with a score
+above the threshold, it is copied to quarantine with a report
+of matches and is NOT registered in the graph.
 
-Il report include score totale, soglia e dettaglio severity.
-Egida — 4° strato di Prometeo (guardrail HSD cross-layer).
+The report includes total score, threshold, and severity detail.
+Egida — 4th layer of Oracle (cross-layer HSD guardrail).
 """
 
 import json
@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 class Quarantine:
     """
-    Isola file HSD in una directory separata, fuori dal grafo.
-    Solo i file con score >= soglia vengono effettivamente isolati.
+    Isolates HSD files in a separate directory, outside the graph.
+    Only files with score >= threshold are actually isolated.
     """
 
     def __init__(self, base_dir: str | Path | None = None):
@@ -37,45 +37,45 @@ class Quarantine:
         source_path: Optional[str | Path] = None,
     ) -> Optional[Path]:
         """
-        Copia un file infetto in quarantena e genera un report JSON.
+        Copies an infected file to quarantine and generates a JSON report.
 
-        Se lo score è sotto soglia, il file NON viene isolato
-        (restituisce None).
+        If the score is below threshold, the file is NOT isolated
+        (returns None).
 
         Args:
-            match: risultato HSDMatch del file analizzato
-            source_path: percorso originale (default: match.file_path)
+            match: HSDMatch result of the analyzed file
+            source_path: original path (default: match.file_path)
 
         Returns:
-            Path della directory di quarantena, o None se sotto soglia.
+            Path to quarantine directory, or None if below threshold.
         """
         if not match.is_infected:
             logger.debug(
-                "File sotto soglia (%d < %d): %s",
+                "File below threshold (%d < %d): %s",
                 match.score, EGIDA_QUARANTINE_THRESHOLD, match.file_path,
             )
             return None
 
         src = Path(source_path or match.file_path)
         if not src.exists():
-            logger.error("File non trovato: %s", src)
-            raise FileNotFoundError(f"File non trovato: {src}")
+            logger.error("File not found: %s", src)
+            raise FileNotFoundError(f"File not found: {src}")
 
-        # Crea directory di quarantena datata
+        # Create dated quarantine directory
         date_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
         dest_dir = self.base_dir / date_prefix
         dest_dir.mkdir(parents=True, exist_ok=True)
 
-        # Copia il file
+        # Copy the file
         dest_file = dest_dir / src.name
         try:
             shutil.copy2(src, dest_file)
-            logger.info("Copiato in quarantena: %s → %s", src, dest_file)
+            logger.info("Copied to quarantine: %s → %s", src, dest_file)
         except Exception as e:
-            logger.error("Errore copia quarantena %s: %s", src, e)
+            logger.error("Error copying to quarantine %s: %s", src, e)
             raise
 
-        # Genera report JSON arricchito
+        # Generate enriched JSON report
         report = {
             "original_path": str(src.absolute()),
             "quarantine_path": str(dest_file.absolute()),
@@ -90,12 +90,12 @@ class Quarantine:
             json.dumps(report, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-        logger.info("Report quarantena: %s", report_path)
+        logger.info("Quarantine report: %s", report_path)
 
         return dest_dir
 
     def list_quarantine(self) -> list[dict]:
-        """Elenca tutti i file in quarantena con i loro report."""
+        """Lists all files in quarantine with their reports."""
         entries = []
         if not self.base_dir.exists():
             return entries
@@ -111,7 +111,7 @@ class Quarantine:
                         entries.append({
                             "quarantine_path": str(entry),
                             "timestamp": entry.name,
-                            "error": "report non leggibile",
+                            "error": "report not readable",
                         })
                 else:
                     entries.append({
@@ -123,12 +123,12 @@ class Quarantine:
         return entries
 
     def clear(self) -> int:
-        """Svuota la quarantena. Restituisce il numero di entry rimosse."""
+        """Empties quarantine. Returns the number of removed entries."""
         count = 0
         if self.base_dir.exists():
             for entry in self.base_dir.iterdir():
                 if entry.is_dir():
                     shutil.rmtree(entry)
                     count += 1
-            logger.info("Quarantena svuotata: %d entry rimosse", count)
+            logger.info("Quarantine emptied: %d entries removed", count)
         return count

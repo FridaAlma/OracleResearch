@@ -1,14 +1,14 @@
 """
-NER leggero per la rilevazione di HSD in linguaggio naturale.
+Lightweight NER for HSD detection in natural language.
 
-Usa SpaCy modello small (it_core_news_sm) su CPU.
-Rileva: PERSONE, INDIRIZZI, LUOGHI, ORGANIZZAZIONI in testi liberi.
+Uses SpaCy small model (it_core_news_sm) on CPU.
+Detects: PERSONS, ADDRESSES, LOCATIONS, ORGANIZATIONS in free text.
 
-Se SpaCy non è installato, il modulo si degrada gracefulmente
-(restituisce lista vuota e logga un avviso).
+If SpaCy is not installed, the module degrades gracefully
+(returns empty list and logs a warning).
 
-v2.0 — Soglia di confidenza configurabile.
-Egida — 4° strato di Oracle (guardrail HSD cross-layer).
+v2.0 — Configurable confidence threshold.
+Egida — 4th layer of Oracle (cross-layer HSD guardrail).
 """
 
 import logging
@@ -18,7 +18,7 @@ from .config import EGIDA_SPACY_MODEL, EGIDA_NER_CONFIDENCE
 
 logger = logging.getLogger(__name__)
 
-# SpaCy caricato lazy
+# Lazy-loaded SpaCy
 _nlp = None
 
 
@@ -29,18 +29,18 @@ def _load_model():
     try:
         import spacy
         _nlp = spacy.load(EGIDA_SPACY_MODEL)
-        logger.info("Modello SpaCy '%s' caricato.", EGIDA_SPACY_MODEL)
+        logger.info("SpaCy model '%s' loaded.", EGIDA_SPACY_MODEL)
         return True
     except OSError:
         logger.warning(
-            "Modello SpaCy '%s' non trovato. "
-            "Esegui: python -m spacy download %s",
+            "SpaCy model '%s' not found. "
+            "Run: python -m spacy download %s",
             EGIDA_SPACY_MODEL,
             EGIDA_SPACY_MODEL,
         )
         return False
     except ImportError:
-        logger.warning("SpaCy non installato. Installa con: pip install spacy")
+        logger.warning("SpaCy not installed. Install with: pip install spacy")
         return False
 
 
@@ -49,15 +49,15 @@ def scan_text(
     min_confidence: Optional[float] = None,
 ) -> list[dict]:
     """
-    Analizza un testo con SpaCy NER e restituisce le entità trovate.
+    Analyzes text with SpaCy NER and returns found entities.
 
     Args:
-        text: Testo da analizzare.
-        min_confidence: Soglia minima di confidenza (0.0-1.0).
-                        Default: dal config (EGIDA_NER_CONFIDENCE).
+        text: Text to analyze.
+        min_confidence: Minimum confidence threshold (0.0-1.0).
+                        Default: from config (EGIDA_NER_CONFIDENCE).
 
     Returns:
-        Lista di dict con: text, label, start, end, confidence
+        List of dicts with: text, label, start, end, confidence
     """
     if not _load_model():
         return []
@@ -68,19 +68,19 @@ def scan_text(
     doc = _nlp(text)
     entities = []
 
-    # Calcola la confidenza media delle entità (SpaCy small non
-    # espone confidence nativamente; usiamo un'euristica basata
-    # sulla lunghezza dell'entità e contesto)
+    # Estimate entity confidence (SpaCy small doesn't
+    # natively expose confidence; we use a heuristic based
+    # on entity length and context)
     for ent in doc.ents:
         if ent.label_ not in {"PERSON", "GPE", "LOC", "ORG", "ADDRESS"}:
             continue
 
-        # Euristica di confidenza: entità molto corte (<3 caratteri)
-        # in isolamento sono probabilmente falsi positivi
+        # Confidence heuristic: very short entities (<3 chars)
+        # in isolation are likely false positives
         if len(ent.text.strip()) < 3:
             continue
 
-        # Entità che sono solo numeri o caratteri speciali → scarta
+        # Entities that are only numbers or special chars → discard
         if ent.text.strip().isnumeric():
             continue
 
@@ -96,20 +96,20 @@ def scan_text(
 
 def scan_file(file_path: str, min_confidence: Optional[float] = None) -> list[dict]:
     """
-    Legge un file di testo e lo analizza con SpaCy NER.
+    Reads a text file and analyzes it with SpaCy NER.
 
     Args:
-        file_path: Percorso del file.
-        min_confidence: Soglia minima di confidenza.
+        file_path: File path.
+        min_confidence: Minimum confidence threshold.
 
     Returns:
-        Lista di entità trovate.
+        List of found entities.
     """
     try:
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
             text = f.read()
     except Exception as e:
-        logger.warning("Impossibile leggere %s: %s", file_path, e)
+        logger.warning("Cannot read %s: %s", file_path, e)
         return []
 
     return scan_text(text, min_confidence=min_confidence)
