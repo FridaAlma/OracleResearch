@@ -1,132 +1,132 @@
 # Oracle RUI Edition
 
-**Ricerca · Unione · Intelligenza**
+**Research · Union · Intelligence**
 
-Framework OSINT modulare a 4 strati per ricercatori: agente autonomo con memoria, grafo della conoscenza, identity resolution e guardrail etico.
+Modular 4-layer OSINT framework for researchers: autonomous agent with memory, knowledge graph, identity resolution, and ethical guardrails.
 
 ---
 
-## Architettura
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                   ORACLE CORE (:8100)                    │
-│            Agente esecutivo + Frontend web               │
-│   50+ provider LLM · MCTS · Sandbox · Vector Memory      │
-│             RUI Framework (24 tool OSINT)                │
+│            Executive Agent + Web Frontend                │
+│   50+ LLM providers · MCTS · Sandbox · Vector Memory     │
+│             RUI Framework (24 OSINT tools)               │
 └──────┬───────────────────────────────────────────────────┘
        │
    ┌───┴───────────────┬──────────────────────┐
    │                   │                      │
 ┌──┴──────────┐  ┌────┴──────────┐  ┌───────┴──────────┐
 │  PENELOPE   │  │  ARCHIMEDE    │  │     EGIDA         │
-│  (:5000)    │  │  (:8001)      │  │  (integrato)      │
-│  Ingestione │  │  Graph Reader │  │  Guardrail HSD    │
-│  + Grafo    │  │  + Face Match │  │  · NER detection  │
-│             │  │               │  │  · Quarantena     │
+│  (:5000)    │  │  (:8001)      │  │  (integrated)     │
+│  Ingestion  │  │  Graph Reader │  │  HSD Guardrail    │
+│  + Graph    │  │  + Face Match │  │  · NER detection  │
+│             │  │               │  │  · Quarantine     │
 └─────────────┘  └───────────────┘  └────────────────────┘
 ```
 
-| Strato | Ruolo | Porta | Avvio |
+| Layer | Role | Port | Startup |
 |--------|-------|-------|-------|
-| **Oracle Core** | Agente esecutivo, UI, tool OSINT | :8100 | Sempre |
-| **Penelope** | Ingestione dati, grafo conoscenza (MariaDB/ChromaDB) | :5000 | `--with-penelope` |
-| **Archimede** | Navigazione read-only grafo, face recognition | :8001 | `--with-archimede` |
-| **Egida** | Guardrail HSD integrato in tutti i layer | — | Automatico |
+| **Oracle Core** | Executive agent, UI, OSINT tools | :8100 | Always |
+| **Penelope** | Data ingestion, knowledge graph (MariaDB/ChromaDB) | :5000 | `--with-penelope` |
+| **Archimede** | Read-only graph navigation, face recognition | :8001 | `--with-archimede` |
+| **Egida** | Integrated HSD guardrail across all layers | — | Automatic |
 
 ---
 
-## Quick Start (5 minuti)
+## Quick Start (5 minutes)
 
-### Prerequisiti
+### Prerequisites
 - Python 3.11+
 - Git
-- (Opzionale) Docker — per MariaDB
+- (Optional) Docker — for MariaDB
 
-### 1. Clona e installa
+### 1. Clone and install
 
 ```bash
 git clone <repo-url> oracle-rui-edition
 cd oracle-rui-edition
 
-# Crea ambiente virtuale
+# Create virtual environment
 python -m venv venv
 venv\Scripts\activate      # Windows
 # source venv/bin/activate  # Linux/macOS
 
-# Installa dipendenze
+# Install dependencies
 pip install -r oracle-rui/requirements.txt
 ```
 
-### 2. Setup guidato
+### 2. Guided setup
 
 ```bash
 python run.py --init
 ```
 
-Questo copia i template `.env.example` nei rispettivi `.env`. Modifica i file creati:
+This copies `.env.example` templates into their respective `.env`. Edit the created files:
 
-- `oracle-rui/.env` → inserisci la tua API key LLM
-- `penelope/.env` → configura storage paths (opzionale)
-- `archimede/.env` → configura API key e path Penelope (opzionale)
+- `oracle-rui/.env` → enter your LLM API key
+- `penelope/.env` → configure storage paths (optional)
+- `archimede/.env` → configure API key and Penelope path (optional)
 
-### 3. Avvia
+### 3. Launch
 
 ```bash
-# Solo Oracle Core (agente + frontend)
+# Oracle Core only (agent + frontend)
 python run.py
 
-# Oracle + Penelope + Archimede (sistema completo)
+# Oracle + Penelope + Archimede (full system)
 python run.py --all
 ```
 
-Apri [http://localhost:8100](http://localhost:8100) nel browser.
+Open [http://localhost:8100](http://localhost:8100) in your browser.
 
 ---
 
-## Configurazione
+## Configuration
 
 ### Oracle Core
 
-Modifica `oracle-rui/.env`:
+Edit `oracle-rui/.env`:
 
 ```ini
-# API key LLM (almeno una)
+# LLM API key (at least one)
 OPENAI_API_KEY=sk-...
 DEEPSEEK_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-...
 
-# Provider default
+# Default provider
 ORACLE_DEFAULT_PROVIDER=deepseek
 ORACLE_DEFAULT_MODEL=deepseek-chat
 ```
 
-### Penelope (Grafo della conoscenza)
+### Penelope (Knowledge Graph)
 
-Il grafo richiede un database SQL. Due opzioni:
+The graph requires an SQL database. Two options:
 
-**Opzione A — Docker MariaDB (consigliata)**
+**Option A — Docker MariaDB (recommended)**
 
 ```bash
 docker-compose up -d
 ```
 
-**Opzione B — SQLite (zero setup)**
+**Option B — SQLite (zero setup)**
 
-Modifica `penelope/.env`:
+Edit `penelope/.env`:
 ```ini
 PENELOPE_DB_BACKEND=sqlite
 ```
 
-Poi configura gli storage path da scandire:
+Then configure storage paths to scan:
 ```ini
-PENELOPE_STORAGE_1=C:/Users/tuono/Documenti
-PENELOPE_STORAGE_2=D:/ArchivioFoto
+PENELOPE_STORAGE_1=C:/Users/yourname/Documents
+PENELOPE_STORAGE_2=D:/PhotoArchive
 ```
 
 ### Archimede (Face Recognition)
 
-Richiede Penelope attivo. Modifica `archimede/.env`:
+Requires Penelope running. Edit `archimede/.env`:
 ```ini
 ARCHIMEDE_API_KEY=sk-...
 ARCHIMEDE_PENELOPE_PATH=../penelope
@@ -134,38 +134,38 @@ ARCHIMEDE_PENELOPE_PATH=../penelope
 
 ---
 
-## Comandi
+## Commands
 
 ```bash
-# Avvio
-python run.py                        # Solo Oracle
+# Startup
+python run.py                        # Oracle only
 python run.py --with-penelope        # + Penelope
 python run.py --with-archimede       # + Archimede
-python run.py --all                  # Tutto
-python run.py --port 9000            # Porta personalizzata
+python run.py --all                  # Everything
+python run.py --port 9000            # Custom port
 
-# Diagnostica
-python run.py --status               # Stato componenti
+# Diagnostics
+python run.py --status               # Component status
 
 # Setup
-python run.py --init                 # Setup guidato
+python run.py --init                 # Guided setup
 
 # Penelope CLI
-python -m penelope.cli scan:all      # Scansiona storage
-python -m penelope.cli queue loop    # Elabora coda
+python -m penelope.cli scan:all      # Scan storage
+python -m penelope.cli queue loop    # Process queue
 
 # Archimede CLI
-python -m archimede.query stats      # Statistiche grafo
+python -m archimede.query stats      # Graph stats
 python -m archimede.query find-parents --ref-dir ref_faces/
 ```
 
 ---
 
-## Tool OSINT (RUI Framework)
+## OSINT Tools (RUI Framework)
 
-24 tool OSINT integrati nell'agente Oracle Core. Accessibili via chat o API:
+24 OSINT tools integrated into the Oracle Core agent. Accessible via chat or API:
 
-| Categoria | Tool |
+| Category | Tool |
 |-----------|------|
 | **Web** | web_search, web_scrape, download_file |
 | **Email** | email_lookup, domain_reputation, haveibeenpwned |
@@ -178,40 +178,40 @@ python -m archimede.query find-parents --ref-dir ref_faces/
 
 ---
 
-## Personalizzazione
+## Customization
 
-Tutto è configurabile via `.env`. Nessun dato personale, nessun hardcode.
+Everything is configurable via `.env`. No personal data, no hardcoding.
 
-- **LLM**: 50+ provider supportati (OpenAI, DeepSeek, Anthropic, Ollama, Groq, Together...)
-- **Database**: MariaDB o SQLite
-- **Storage**: Fino a 5 dispositivi/path
+- **LLM**: 50+ providers supported (OpenAI, DeepSeek, Anthropic, Ollama, Groq, Together...)
+- **Database**: MariaDB or SQLite
+- **Storage**: Up to 5 devices/paths
 - **Face Recognition**: InsightFace (ArcFace 512-dim, CPU)
-- **NER**: SpaCy (italiano predefinito, configurabile)
-- **Guardrail**: Soglie HSD configurabili in `egida/config.py`
+- **NER**: SpaCy (Italian default, configurable)
+- **Guardrail**: HSD thresholds configurable in `egida/config.py`
 
 ---
 
-## Requisiti di sistema
+## System Requirements
 
-| Risorsa | Minimo | Consigliato |
+| Resource | Minimum | Recommended |
 |---------|--------|-------------|
 | CPU | 4 core | 8+ core |
 | RAM | 8 GB | 16+ GB |
-| Disco | 2 GB (codice) + spazio per dati | SSD |
-| GPU | Non richiesta | Opzionale (per face rec) |
-| Rete | Internet per API LLM | — |
+| Disk | 2 GB (code) + data space | SSD |
+| GPU | Not required | Optional (for face rec) |
+| Network | Internet for LLM APIs | — |
 
 ---
 
-## Licenza
+## License
 
-Oracle RUI Edition e' rilasciato per uso di ricerca. Ogni ricercatore configura il proprio
-ambiente e i propri dati. Il software non contiene, raccoglie o trasmette dati personali.
+Oracle RUI Edition is released for research use. Each researcher configures their own
+environment and their own data. The software does not contain, collect, or transmit personal data.
 
 ---
 
-## Riferimenti
+## References
 
-- [Oracle_Architettura.md](Oracle_Architettura.md) — Documento di architettura completo
-- [SETUP.md](SETUP.md) — Guida dettagliata di setup
-- [CONSTITUTION.md](oracle-rui/CONSTITUTION.md) — Costituzione Oracle
+- [Oracle_Architettura.md](Oracle_Architettura.md) — Complete architecture document
+- [SETUP.md](SETUP.md) — Detailed setup guide
+- [CONSTITUTION.md](oracle-rui/CONSTITUTION.md) — Oracle Constitution

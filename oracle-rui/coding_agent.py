@@ -12,27 +12,27 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 
-# ── Key words che attivano automaticamente il modello Pro ────────
+# ── Keywords that auto-activate the Pro model ────────────────────
 _COMPLEXITY_KEYWORDS = {
-    # OSINT / verifica
+    # OSINT / verification
     "osint", "verifica", "verify", "scam", "truffa", "fraud",
-    "cross-ref", "cross-reference", "fact-check", "factcheck",
-    "confidence", "incongruity", "incongruenza", "pest",
+    "cross-reference", "fact-check", "factcheck",
+    "confidence", "inconsistency", "incongruity", "incongruenza", "pest",
     "triangulation", "triangolazione", "reputation",
-    # Sicurezza
+    # Security
     "security", "vulnerability", "cve", "exploit", "threat",
     "malware", "phishing", "breach", "data leak",
-    # Coding complesso
-    "refactor", "architettura", "architecture", "design pattern",
+    # Complex coding
+    "refactor", "architecture", "architecture", "design pattern",
     "multi-file", "codebase", "dependency", "migration",
     "optimization", "performance",
-    # Analisi profonda
-    "deep analysis", "approfondito", "comprehensive",
+    # Deep analysis
+    "deep analysis", "in-depth", "comprehensive",
     "research", "ricerca", "investigation", "indagine",
     "report", "executive summary",
 }
 
-# ── Parole che indicano task semplici → prompt LITE + Flash ─────
+# ── Words indicating simple tasks → LITE prompt + Flash ─────
 _LITE_KEYWORDS = {
     "hello", "hi", "ciao", "help", "aiuto",
     "typo", "format", "formatta",
@@ -48,7 +48,7 @@ _PROMPT_TIERS = {
 
 
 def _detect_prompt_tier(message: str) -> str:
-    """Auto-detect: 'lite', 'standard' o 'pro' in base al contenuto."""
+    """Auto-detect: 'lite', 'standard' or 'pro' based on content."""
     msg_lower = message.lower()
     has_lite = any(k in msg_lower for k in _LITE_KEYWORDS)
     has_complex = any(k in msg_lower for k in _COMPLEXITY_KEYWORDS)
@@ -67,32 +67,32 @@ _detect_task_complexity = _detect_prompt_tier
 
 
 def _get_instructions_path(tier: str) -> str:
-    """Restituisce il path del file prompt per il tier richiesto."""
+    """Returns the prompt file path for the requested tier."""
     filename = _PROMPT_TIERS.get(tier, "system_prompt_standard.md")
     return str(BASE_DIR / filename)
 
 
 class AgnoFilter(logging.Filter):
-    """Mostra i log del framework, escludendo solo librerie rumorose."""
+    """Shows framework logs, excluding only noisy libraries."""
     def filter(self, record):
         name = record.name.lower()
-        # Escludi solo librerie di rete/HTTP connesse
+        # Exclude only network/HTTP libraries
         noisy = ['httpx', 'uvicorn.access', 'httpcore', 'urllib3',
                  'charset_normalizer', 'asyncio']
         if any(n in name for n in noisy):
             return False
         msg = record.getMessage()
-        # Escludi health check HTTP
+        # Exclude HTTP health check
         if '/health' in msg and 'HTTP' in msg:
             return False
-        # Escludi messaggi di avvio uvicorn
+        # Exclude uvicorn startup messages
         if 'uvicorn' in name and ('started' in msg.lower() or 'reload' in msg.lower()):
             return False
         return True
 
 
 class SSELogHandler(logging.Handler):
-    """Cattura i log del framework e li mette in coda per SSE."""
+    """Captures framework logs and queues them for SSE."""
     def __init__(self, level=logging.INFO):
         super().__init__(level=level)
         self.log_queue = queue.Queue()
@@ -115,51 +115,51 @@ class SSELogHandler(logging.Handler):
                 break
         return records
 
-# Carica .env dal percorso assoluto di Oracle (funziona sempre, anche se importato)
+# Load .env from Oracle's absolute path (always works, even when imported)
 _oracle_env = Path(__file__).resolve().parent / ".env"
 if _oracle_env.exists():
     load_dotenv(dotenv_path=_oracle_env, override=True)
 else:
-    load_dotenv()  # fallback: cerca nella CWD
+    load_dotenv()  # fallback: search in CWD
 
 BASE_DIR = Path(__file__).parent.resolve()
-# ── Oracle root (per importare egida, 4° strato) ──
+# ── Oracle root (to import egida, 4th layer) ──
 ORACLE_ROOT_DIR = BASE_DIR.parent
 if str(ORACLE_ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ORACLE_ROOT_DIR))
-# ── Working directory: cartella radice dove Oracle può operare ──
-#    Dinamica: ORACLE_ROOT_DIR.parent (es. D:\Work\RUI_Software)
-#    Così Oracle può accedere a progetti fratelli (archimede, egida, penelope)
+# ── Working directory: root folder where Oracle can operate ──
+#    Dynamic: ORACLE_ROOT_DIR.parent (e.g., D:\Work\RUI_Software)
+#    This way Oracle can access sibling projects (archimede, egida, penelope)
 WORK_ROOT = ORACLE_ROOT_DIR.parent.resolve()
 print(f"[Oracle] ORACLE_ROOT_DIR: {ORACLE_ROOT_DIR}")
 print(f"[Oracle] BASE_DIR (Oracle): {BASE_DIR}")
-print(f"[Oracle] WORK_ROOT (area operativa): {WORK_ROOT}")
+print(f"[Oracle] WORK_ROOT (operating area): {WORK_ROOT}")
 
 # ── API Connectivity Check ──────────────────────────────────────
 def _check_api_connectivity():
-    """Verifica la connettività con l'API del provider configurato."""
+    """Verifies connectivity with the configured provider's API."""
     api_key = os.getenv("API_KEY")
     base_url = os.getenv("API_BASE_URL", "")
     model_id = os.getenv("MODEL_ID", "")
     provider = os.getenv("MODEL_PROVIDER", "openai")
 
     if not api_key:
-        print("[DIAG] API_KEY non impostata in .env — copia .env.example in .env")
+        print("[DIAG] API_KEY not set in .env — copy .env.example to .env")
         return
 
     import httpx
 
-    # Determina l'URL corretto per la lista modelli
-    # La maggior parte dei provider OpenAI-compatible usa {base_url}/models
+    # Determine the correct URL for model listing
+    # Most OpenAI-compatible providers use {base_url}/models
     # OpenRouter: https://openrouter.ai/api/v1/models
-    # Se base_url contiene già /chat/completions, lo rimuoviamo
+    # If base_url already contains /chat/completions, strip it
     models_url = base_url.rstrip("/") if base_url else ""
     for suffix in ["/chat/completions", "/v1/chat/completions", "/completions"]:
         if models_url.endswith(suffix):
             models_url = models_url[: -len(suffix)]
             break
     
-    # Se non c'è base_url, usa il default del provider
+    # If no base_url, use the provider's default
     if not models_url:
         provider_defaults = {
             "openai": "https://api.openai.com/v1",
@@ -174,12 +174,12 @@ def _check_api_connectivity():
         models_url = provider_defaults.get(provider, "")
 
     if not models_url:
-        print(f"[DIAG] API_BASE_URL non configurata per '{provider}' — salto verifica")
+        print(f"[DIAG] API_BASE_URL not configured for '{provider}' — skipping check")
         return
 
-    # Verifica che l'URL finisca con /v1 o simile prima di aggiungere /models
+    # Ensure URL ends with /v1 or similar before adding /models
     test_url = f"{models_url.rstrip('/')}/models"
-    print(f"[DIAG] Connessione a {test_url} ...", end=" ", flush=True)
+    print(f"[DIAG] Connecting to {test_url} ...", end=" ", flush=True)
     try:
         r = httpx.get(
             test_url,
@@ -189,23 +189,23 @@ def _check_api_connectivity():
         if r.status_code == 200:
             models = [m["id"] for m in r.json().get("data", [])]
             if model_id and model_id in models:
-                print(f"OK (modello '{model_id}' trovato)")
+                print(f"OK (model '{model_id}' found)")
             elif models:
-                print(f"OK ({len(models)} modelli disponibili)")
+                print(f"OK ({len(models)} models available)")
                 if model_id:
-                    print(f"      → modello '{model_id}' non in lista. Verifica MODEL_ID")
+                    print(f"      → model '{model_id}' not in list. Check MODEL_ID")
             else:
-                print("OK (nessun modello listato)")
+                print("OK (no models listed)")
         else:
             print(f"HTTP {r.status_code}")
-            msgs = {401: "API_KEY non valida o scaduta", 402: "Credito insufficiente",
-                    404: "Endpoint /models non trovato. Verifica API_BASE_URL in .env"}
+            msgs = {401: "API_KEY invalid or expired", 402: "Insufficient credit",
+                    404: "Endpoint /models not found. Check API_BASE_URL in .env"}
             print(f"      → {msgs.get(r.status_code, r.text[:120])}")
     except httpx.ConnectError:
-        print("irraggiungibile")
-        print(f"      → Verifica connessione Internet e API_BASE_URL in .env")
+        print("unreachable")
+        print(f"      → Check Internet connection and API_BASE_URL in .env")
     except Exception as e:
-        print(f"errore: {e}")
+        print(f"error: {e}")
 
 
 from agno.agent import Agent # type: ignore
@@ -233,7 +233,7 @@ try:
     _tool_repo = ToolRepository()
     _repo_summary = _tool_repo.get_summary()
     if _repo_summary["total_tools"] > 0:
-        print(f"[Oracle Bootstrap] Tool Repository: {_repo_summary['total_tools']} tool disponibili")
+        print(f"[Oracle Bootstrap] Tool Repository: {_repo_summary['total_tools']} tools available")
         _tool_repo.write_index()
 except Exception as _e:
     print(f"[Oracle Bootstrap] Tool Repository init: {_e}")
@@ -246,10 +246,10 @@ try:
     _lifecycle = ToolLifecycleManager()
     _orphans = _lifecycle.scan_and_register_orphans()
     if _orphans:
-        print(f"[Oracle Bootstrap] Registrati {len(_orphans)} tool orfani (ex: {_orphans[0]})")
+        print(f"[Oracle Bootstrap] Registered {len(_orphans)} orphan tools (ex: {_orphans[0]})")
     _expired = _lifecycle.cleanup_expired()
     if _expired:
-        print(f"[Oracle Bootstrap] Puliti {len(_expired)} tool scaduti")
+        print(f"[Oracle Bootstrap] Cleaned up {len(_expired)} expired tools")
 except Exception as _e:
     print(f"[Oracle Bootstrap] Lifecycle init: {_e}")
 
@@ -258,7 +258,7 @@ try:
     from tools.immunity_guardian import ImmunityGuardian
 
     _immunity = ImmunityGuardian()
-    print(f"[Oracle Bootstrap] ImmunityGuardian attivo — sessione {_immunity.get_session_id()}")
+    print(f"[Oracle Bootstrap] ImmunityGuardian active — session {_immunity.get_session_id()}")
     print(f"[Oracle Bootstrap]   Pattern: {len(_immunity.INJECTION_PATTERNS)} injection + "
           f"{len(_immunity.LEAK_PATTERNS)} leak + {len(_immunity.JAILBREAK_PATTERNS)} jailbreak")
 
@@ -266,7 +266,7 @@ try:
     try:
         _lifecycle.register(
             file_path="tools/immunity_guardian.py",
-            purpose="Runtime security guardian per l'agente Oracle",
+            purpose="Runtime security guardian for the Oracle agent",
             tool_type="persistent",
             depends_on=["tools/immunity_config.json"],
         )
@@ -275,7 +275,7 @@ try:
 
 except Exception as _e:
     print(f"[Oracle Bootstrap] ImmunityGuardian init: {_e}")
-    _immunity = None  # Fallback: sistema non protetto
+    _immunity = None  # Fallback: unprotected system
 
 # ── Oracle Orchestrator Bootstrap ────────────────────────────
 try:
@@ -288,7 +288,7 @@ try:
         identity_enabled=True,
     )
     _oracle = OracleOrchestrator(_oracle_config)
-    print(f"[Oracle Bootstrap] Oracle Orchestrator attivo")
+    print(f"[Oracle Bootstrap] Oracle Orchestrator active")
     print(f"[Oracle Bootstrap]   Penelope mode: {_oracle.config.penelope_mode}")
     print(f"[Oracle Bootstrap]   Archimede API: {_oracle.config.archimede_api_url}")
 except Exception as _e:
@@ -302,10 +302,10 @@ try:
     _chunk_filter_pipeline = get_chunk_filter_pipeline()
     _cf_stats = _chunk_filter_pipeline.get_stats()
     if _cf_stats["pipeline_ready"]:
-        print(f"[Oracle Bootstrap] ChunkFilter attivo — {_cf_stats['filter']['model']} "
+        print(f"[Oracle Bootstrap] ChunkFilter active — {_cf_stats['filter']['model']} "
               f"(threshold={_cf_stats['filter']['threshold']:.2f})")
     else:
-        print(f"[Oracle Bootstrap] ChunkFilter non pronto — fallback a no-filter")
+        print(f"[Oracle Bootstrap] ChunkFilter not ready — fallback to no-filter")
 except Exception as _e:
     print(f"[Oracle Bootstrap] ChunkFilter init: {_e}")
     _chunk_filter_pipeline = None
@@ -378,14 +378,14 @@ if not REQUIRE_AUTHENTICATION and API_SECURITY_AVAILABLE:
         return None
 
 def _select_model(tier: str, message: str = ""):
-    """Seleziona il modello in base al tier e al contenuto del messaggio.
+    """Selects the model based on tier and message content.
 
     Args:
-        tier: "flash", "pro", "auto" (default: da .env MODEL_TIER)
-        message: testo della richiesta per auto-detection
+        tier: "flash", "pro", "auto" (default: from .env MODEL_TIER)
+        message: request text for auto-detection
 
     Returns:
-        Istanza del modello appropriata (dipende dal provider configurato).
+        Appropriate model instance (depends on configured provider).
     """
     effective_tier = tier or os.getenv("MODEL_TIER", "auto")
 
@@ -402,7 +402,7 @@ _check_api_connectivity()
 
 # ── Initial Info Builder (path dinamici) ─────────────────────────
 def _build_initial_info() -> str:
-    """Blocco 'Initial info' con percorsi reali, iniettato a runtime."""
+    """'Initial info' block with real paths, injected at runtime."""
     main_files = ("coding_agent.py, cli.py, system_prompt.md, .env, .env.example, "
                   "coding_agent.db, chat.html, oracle.bat, CONSTITUTION.md")
     return (f"\n## 13. Initial info\n\n"
@@ -449,8 +449,8 @@ coding_agent_pro = Agent(
 
 
 def _get_agent(tier: str = None, message: str = "") -> Agent:
-    """Restituisce l'agente appropriato in base al tier e al messaggio.
-    Imposta automaticamente le istruzioni giuste in base al prompt tier."""
+    """Returns the appropriate agent based on tier and message.
+    Automatically sets the right instructions based on the prompt tier."""
     selected = _select_model(tier, message)
     agent = coding_agent_pro if selected is model_pro else coding_agent
 
@@ -477,7 +477,7 @@ def _get_agent(tier: str = None, message: str = "") -> Agent:
         tier_text = open(instructions_path, "r", encoding="utf-8").read().strip()
         agent.instructions = tier_text.split("\n") + _INITIAL_INFO_LINES
     except Exception:
-        pass  # fallback: mantiene le istruzioni già impostate
+        pass  # fallback: keeps already-set instructions
 
     return agent
 
@@ -538,13 +538,13 @@ else:
 
 # ── Model info ────────────────────────────────────────────────────
 def _get_active_model_info(tier: str = None, message: str = "") -> dict:
-    """Restituisce info sul modello attivo per una richiesta."""
+    """Returns info about the active model for a request."""
     selected = _select_model(tier, message)
     model_id = getattr(selected, "id", "unknown")
     is_pro = selected is model_pro
     effective_tier = tier or os.getenv("MODEL_TIER", "auto")
 
-    # Determina il prompt tier effettivo
+    # Determine the effective prompt tier
     if effective_tier == "auto":
         pt = _detect_prompt_tier(message)
     elif effective_tier == "pro":
@@ -567,10 +567,10 @@ def _get_active_model_info(tier: str = None, message: str = "") -> dict:
 
 # ── Immunity Integration Functions ──────────────────────────
 
-_immunity_guard = None  # Inizializzato nel bootstrap sopra
+_immunity_guard = None  # Initialized in bootstrap above
 
 def _get_immunity():
-    """Restituisce l'istanza globale di ImmunityGuardian."""
+    """Returns the global ImmunityGuardian instance."""
     global _immunity_guard
     if _immunity_guard is None:
         try:
@@ -583,19 +583,19 @@ def _get_immunity():
 
 def immunity_check_message(message: str, source: str = "USER"):
     """
-    Verifica un messaggio con ImmunityGuardian.
-    Se bloccato, restituisce un messaggio di errore.
-    Se OK, restituisce None.
+    Checks a message with ImmunityGuardian.
+    If blocked, returns an error message.
+    If OK, returns None.
     """
     guard = _get_immunity()
     if guard is None:
-        return None  # Immunity non disponibile → passa
+        return None  # Immunity not available → pass through
 
     result = guard.check_input(message, source=source)
     if result["status"] == "BLOCKED":
         code = result.get("code", "SECURITY_BLOCK")
-        guard.log_attempt(code, f"Input bloccato da {source}: {message[:100]}")
-        return f"[SECURITY BLOCKED] Richiesta bloccata dal sistema di sicurezza ({code})."
+        guard.log_attempt(code, f"Input blocked from {source}: {message[:100]}")
+        return f"[SECURITY BLOCKED] Request blocked by security system ({code})."
     return None
 
 
@@ -609,17 +609,17 @@ def immunity_sanitize(text: str) -> str:
 
 def _inject_chunk_context(message: str) -> str:
     """
-    [SPERIMENTALE] Filtra chunk di contesto tramite ChunkFilter (modello-figlio).
+    [EXPERIMENTAL] Filters context chunks via ChunkFilter (child model).
 
-    TOOL REGISTRATO come 'chunk_filter' nel Tool Repository.
-    NON usato automaticamente — chiamata esplicita solo quando serve.
+    TOOL REGISTERED as 'chunk_filter' in Tool Repository.
+    NOT used automatically — explicit call only when needed.
 
-    Uso:
+    Usage:
         context = _inject_chunk_context(message)
         if context:
             message = context + "\\n\\n" + message
 
-    Se ChunkFilter non è disponibile, ritorna stringa vuota.
+    If ChunkFilter is not available, returns empty string.
     """
     if _chunk_filter_pipeline is None or not _chunk_filter_pipeline.is_ready():
         return ""
@@ -636,8 +636,8 @@ def _inject_chunk_context(message: str) -> str:
 
 def immunity_sanitize_response(agent_result):
     """
-    Sanitizza il contenuto della risposta dell'agente.
-    Modifica l'oggetto risultato in-place se ha un attributo 'content'.
+    Sanitizes the content of the agent's response.
+    Modifies the result object in-place if it has a 'content' attribute.
     """
     guard = _get_immunity()
     if guard is None:
@@ -690,9 +690,9 @@ async def chat_api(
     model_tier = body.get("model_tier", None)
 
     if not message.strip():
-        return JSONResponse({"error": "Il messaggio non può essere vuoto"}, status_code=400)
+        return JSONResponse({"error": "Message cannot be empty"}, status_code=400)
 
-    # → IMMUNITY CHECK: input utente
+    # → IMMUNITY CHECK: user input
     block_msg = immunity_check_message(message, source="USER")
     if block_msg:
         return JSONResponse({
@@ -721,7 +721,7 @@ async def chat_api(
         logging.error(f"[API] ModelProviderError: status={e.status_code} message={e.message} model={e.model_id}")
         return JSONResponse({"error": e.message, "status_code": e.status_code}, status_code=e.status_code)
     except Exception as e:
-        logging.error(f"[API] Errore interno: {type(e).__name__}: {e}", exc_info=True)
+        logging.error(f"[API] Internal error: {type(e).__name__}: {e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -751,10 +751,10 @@ async def chat_stream(
         last_run_id = None
         content_buffer = ""
 
-        # Cattura i log del framework Agno via root logger + filtro
-        # NOTA: il root logger ha default WARNING, ma i messaggi INFO dei tool
-        # vengono emessi dai logger figli (che hanno livello proprio). Dobbiamo
-        # abbassare il root logger a INFO per intercettarli.
+        # Capture Agno framework logs via root logger + filter
+        # NOTE: root logger defaults to WARNING, but tool INFO messages
+        # come from child loggers (which have their own level). We need to
+        # lower the root logger to INFO to intercept them.
         log_capture = SSELogHandler(logging.INFO)
         log_capture.setFormatter(logging.Formatter('%(message)s'))
         _root = logging.getLogger()
@@ -766,23 +766,23 @@ async def chat_stream(
             for rec in log_capture.get_pending():
                 yield f"data: {json.dumps({'type': 'log', 'data': {'text': rec, 'type': 'info'}})}\n\n"
 
-        # → IMMUNITY CHECK: input utente (streaming)
+        # → IMMUNITY CHECK: user input (streaming)
         block_msg = immunity_check_message(message, source="USER")
         if block_msg:
             yield f"data: {json.dumps({'type': 'model', 'data': _get_active_model_info(model_tier, message)})}\n\n"
             yield f"data: {json.dumps({'type': 'content', 'data': ''})}\n\n"
-            yield f"data: {json.dumps({'type': 'log', 'data': {'text': '🛡️ Immunity: richiesta bloccata', 'type': 'info'}})}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'data': {'text': '🛡️ Immunity: request blocked', 'type': 'info'}})}\n\n"
             yield f"data: {json.dumps({'type': 'content', 'data': block_msg})}\n\n"
             return
 
-        # Seleziona il modello e invia info all'UI
+        # Select the model and send info to UI
         agent = _get_agent(model_tier, message)
         model_info = _get_active_model_info(model_tier, message)
         yield f"data: {json.dumps({'type': 'model', 'data': model_info})}\n\n"
 
-        # → Nessun chunk filter automatico — tool sperimentale, chiamata esplicita
+        # → No automatic chunk filter — experimental tool, explicit call only
 
-        # Invia subito un evento start per far sparire i 3 puntini
+        # Send a start event immediately to make the 3 dots disappear
         yield f"data: {json.dumps({'type': 'content', 'data': ''})}\n\n"
 
         try:
@@ -799,7 +799,7 @@ async def chat_stream(
 
                 event_type = getattr(event, "event", "unknown")
 
-                # Flush log del framework PRIMA di ogni evento
+                # Flush framework logs BEFORE each event
                 for log_line in flush_logs():
                     yield log_line
 
@@ -856,12 +856,12 @@ async def chat_stream(
                     last_run_id = rid
 
                 if event_type == "RunError":
-                    error_msg = getattr(event, "content", "Errore sconosciuto") or "Errore sconosciuto"
+                    error_msg = getattr(event, "content", "Unknown error") or "Unknown error"
                     yield f"data: {json.dumps({'type': 'error', 'data': error_msg})}\n\n"
                     yield f"data: {json.dumps({'type': 'log', 'data': {'text': f'✗ {error_msg[:200]}', 'type': 'error'}})}\n\n"
                     break
 
-                # Flush log anche DOPO ogni evento
+                # Flush logs also AFTER each event
                 for log_line in flush_logs():
                     yield log_line
 
@@ -871,13 +871,13 @@ async def chat_stream(
             error_msg = e.message or str(e)
             logging.error(f"[Stream] ModelProviderError: status={e.status_code} message={e.message} model={e.model_id}")
             yield f"data: {json.dumps({'type': 'log', 'data': {'text': f'⚠ [{e.status_code}] {error_msg[:200]}', 'type': 'error'}})}\n\n"
-            yield f"data: {json.dumps({'type': 'error', 'data': f'Errore API ({e.status_code}): {error_msg}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'data': f'API Error ({e.status_code}): {error_msg}'})}\n\n"
         except Exception as e:
             error_msg = str(e)
-            logging.error(f"[Stream] Errore: {type(e).__name__}: {error_msg}", exc_info=True)
+            logging.error(f"[Stream] Error: {type(e).__name__}: {error_msg}", exc_info=True)
             yield f"data: {json.dumps({'type': 'log', 'data': {'text': f'⚠ {error_msg[:200]}', 'type': 'error'}})}\n\n"
             if "incomplete chunked read" in error_msg.lower() or "peer closed connection" in error_msg.lower():
-                yield f"data: {json.dumps({'type': 'retry', 'data': 'Connessione interrotta, nuovo tentativo...'})}\n\n"
+                yield f"data: {json.dumps({'type': 'retry', 'data': 'Connection interrupted, retrying...'})}\n\n"
                 try:
                     set_caller_tag("main_loop.chat_stream_retry")
                     stream2 = agent.arun(message, session_id=session_id, stream=True)
@@ -922,7 +922,7 @@ async def chat_stream(
                                     log_text += f"  {log_detail}"
                                 yield f"data: {json.dumps({'type': 'log', 'data': {'text': log_text, 'type': 'done'}})}\n\n"
                         elif event_type == "RunError":
-                            error_msg2 = getattr(event, "content", "Errore sconosciuto") or "Errore sconosciuto"
+                            error_msg2 = getattr(event, "content", "Unknown error") or "Unknown error"
                             yield f"data: {json.dumps({'type': 'error', 'data': error_msg2})}\n\n"
                             yield f"data: {json.dumps({'type': 'log', 'data': {'text': f'✗ {error_msg2[:200]}', 'type': 'error'}})}\n\n"
                             break
@@ -936,10 +936,10 @@ async def chat_stream(
                             last_run_id = rid
                 except ModelProviderError as e2:
                     logging.error(f"[Stream-Retry] ModelProviderError: status={e2.status_code} message={e2.message}")
-                    yield f"data: {json.dumps({'type': 'error', 'data': f'Errore API dopo retry ({e2.status_code}): {e2.message}'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'error', 'data': f'API Error after retry ({e2.status_code}): {e2.message}'})}\n\n"
                 except Exception as e2:
-                    logging.error(f"[Stream-Retry] Errore: {type(e2).__name__}: {e2}", exc_info=True)
-                    yield f"data: {json.dumps({'type': 'error', 'data': f'Errore dopo retry: {str(e2)}'})}\n\n"
+                    logging.error(f"[Stream-Retry] Error: {type(e2).__name__}: {e2}", exc_info=True)
+                    yield f"data: {json.dumps({'type': 'error', 'data': f'Error after retry: {str(e2)}'})}\n\n"
             else:
                 yield f"data: {json.dumps({'type': 'error', 'data': error_msg})}\n\n"
         finally:
@@ -978,9 +978,9 @@ async def health_check():
 
 @app.get("/api/chunk-filter")
 async def chunk_filter_stats():
-    """Restituisce statistiche del ChunkFilter (modello-figlio)."""
+    """Returns ChunkFilter statistics (child model)."""
     if _chunk_filter_pipeline is None:
-        return JSONResponse({"enabled": False, "error": "ChunkFilter non inizializzato"})
+        return JSONResponse({"enabled": False, "error": "ChunkFilter not initialized"})
     return JSONResponse(_chunk_filter_pipeline.get_stats())
 
 
@@ -991,7 +991,7 @@ async def get_model_info(
         Depends(get_current_active_user)
     ] = None
 ):
-    """Restituisce info sul modello corrente e sulla configurazione."""
+    """Returns info about the current model and configuration."""
     # Check authentication if required
     user = _get_optional_user(None, current_user)
     if REQUIRE_AUTHENTICATION and user is None:
@@ -1094,7 +1094,7 @@ async def get_pending_tools(
         Depends(get_current_active_user)
     ] = None
 ):
-    """Lista dei tool in attesa di approvazione."""
+    """List of tools awaiting approval."""
     # Check authentication if required
     user = _get_optional_user(None, current_user)
     if REQUIRE_AUTHENTICATION and user is None:
@@ -1116,7 +1116,7 @@ async def get_all_tools(
         Depends(get_current_active_user)
     ] = None
 ):
-    """Lista di tutti i tool registrati."""
+    """List of all registered tools."""
     # Check authentication if required
     user = _get_optional_user(None, current_user)
     if REQUIRE_AUTHENTICATION and user is None:
@@ -1158,7 +1158,7 @@ async def approve_tool(
     body = await request.json()
     tool_id = body.get("tool_id", "")
     if not tool_id:
-        return JSONResponse({"error": "tool_id richiesto"}, status_code=400)
+        return JSONResponse({"error": "tool_id required"}, status_code=400)
     enforcer = _get_constitution()
     result = enforcer.tool_registry.approve(tool_id)
     return JSONResponse(result)
@@ -1191,7 +1191,7 @@ async def reject_tool(
     body = await request.json()
     tool_id = body.get("tool_id", "")
     if not tool_id:
-        return JSONResponse({"error": "tool_id richiesto"}, status_code=400)
+        return JSONResponse({"error": "tool_id required"}, status_code=400)
     enforcer = _get_constitution()
     result = enforcer.tool_registry.reject(tool_id)
     return JSONResponse(result)
@@ -1240,7 +1240,7 @@ async def confirm_action(
     body = await request.json()
     conf_id = body.get("confirmation_id", "")
     if not conf_id:
-        return JSONResponse({"error": "confirmation_id richiesto"}, status_code=400)
+        return JSONResponse({"error": "confirmation_id required"}, status_code=400)
     enforcer = _get_constitution()
     result = enforcer.confirmation.confirm(conf_id)
     return JSONResponse(result)
@@ -1251,7 +1251,7 @@ async def confirm_action(
 async def serve_chat_ui():
     if CHAT_HTML_PATH.exists():
         return FileResponse(str(CHAT_HTML_PATH))
-    return JSONResponse({"error": "chat.html non trovato"}, status_code=404)
+    return JSONResponse({"error": "chat.html not found"}, status_code=404)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -1259,15 +1259,15 @@ async def serve_chat_ui():
 # ════════════════════════════════════════════════════════════════
 
 class QueryRequest(BaseModel):
-    query: str = Field(..., description="Richiesta in linguaggio naturale")
-    session_id: Optional[str] = Field(None, description="ID sessione")
-    mode: str = Field("auto", description="Modalità: auto | graph | coding | osint | identity")
-    context: Optional[str] = Field(None, description="Contesto aggiuntivo")
+    query: str = Field(..., description="Natural language query")
+    session_id: Optional[str] = Field(None, description="Session ID")
+    mode: str = Field("auto", description="Mode: auto | graph | coding | osint | identity")
+    context: Optional[str] = Field(None, description="Additional context")
 
 class QueryResponse(BaseModel):
-    content: str = Field(..., description="Risposta elaborata")
-    domains: list[str] = Field(default_factory=list, description="Domini coinvolti")
-    sources: list[str] = Field(default_factory=list, description="Layer utilizzati")
+    content: str = Field(..., description="Processed response")
+    domains: list[str] = Field(default_factory=list, description="Domains involved")
+    sources: list[str] = Field(default_factory=list, description="Layers used")
     session_id: Optional[str] = None
     model: dict = Field(default_factory=dict)
     egida_blocked: bool = False
@@ -1283,21 +1283,21 @@ async def prometeo_query(
     ] = None
 ):
     """
-    Endpoint unificato di Oracle.
+    Oracle unified endpoint.
     
-    Unico punto d'ingresso per tutte le richieste:
-      - graph:     query sul grafo Penelope (foto, persone, eventi)
-      - coding:    scrittura/refactoring/test di codice
-      - osint:     OSINT, verifiche, ricerche web
-      - identity:  identità personale
-      - auto:      routing automatico via LLM
+    Single entry point for all requests:
+      - graph:     Penelope graph queries (photos, people, events)
+      - coding:    code writing/refactoring/testing
+      - osint:     OSINT, verification, web searches
+      - identity:  personal identity
+      - auto:      automatic routing via LLM
     
     Body:
         {
-            "query": "trovami le foto di Angela",
+            "query": "find Angela's photos",
             "session_id": "sess_001",
             "mode": "auto",
-            "context": "contesto opzionale"
+            "context": "optional context"
         }
     """
     user = _get_optional_user(request, current_user)
@@ -1315,17 +1315,17 @@ async def prometeo_query(
     context = body.get("context", "")
 
     if not query_text.strip():
-        return JSONResponse({"error": "La query non può essere vuota"}, status_code=400)
+        return JSONResponse({"error": "Query cannot be empty"}, status_code=400)
 
-    # ── Mappa mode → domini forzati ────────────────────────────
+    # ── Map mode → forced domains ────────────────────────────
     force_domains = None
     if mode and mode != "auto":
         force_domains = [mode]
 
-    # ── Usa Oracle Orchestrator ──────────────────────────────
+    # ── Use Oracle Orchestrator ──────────────────────────────
     if _oracle is None:
         return JSONResponse({
-            "content": "Oracle Orchestrator non disponibile. Usa /api/chat per richieste generiche.",
+            "content": "Oracle Orchestrator not available. Use /api/chat for generic requests.",
             "domains": [],
             "sources": [],
             "session_id": session_id,
@@ -1343,7 +1343,7 @@ async def prometeo_query(
         )
         duration = time.time() - t_start
 
-        # Determina fonti (layer usati)
+        # Determine sources (layers used)
         sources = []
         for dr in result.domain_results:
             if dr.status == "success":
@@ -1365,9 +1365,9 @@ async def prometeo_query(
         )
 
     except Exception as e:
-        logging.error(f"[Oracle Query] Errore: {type(e).__name__}: {e}", exc_info=True)
+        logging.error(f"[Oracle Query] Error: {type(e).__name__}: {e}", exc_info=True)
         return JSONResponse({
-            "content": f"Errore durante l'elaborazione: {str(e)}",
+            "content": f"Error during processing: {str(e)}",
             "domains": [],
             "sources": [],
             "session_id": session_id,
@@ -1377,7 +1377,7 @@ async def prometeo_query(
 
 @app.get("/api/query/health")
 async def prometeo_health():
-    """Health check del sistema Oracle unificato."""
+    """Oracle unified system health check."""
     from tools.penelope_bridge import PenelopeBridge
 
     status = {
@@ -1389,7 +1389,7 @@ async def prometeo_health():
         },
     }
 
-    # Verifica Archimede/Penelope
+    # Check Archimede/Penelope
     try:
         bridge = PenelopeBridge(mode=os.getenv("PENELOPE_BRIDGE_MODE", "auto"))
         if bridge.is_available():
@@ -1407,12 +1407,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Oracle - AI Coding Agent Server")
     parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8000")),
-                        help="Porta del server (default: %(default)s)")
+                        help="Server port (default: %(default)s)")
     parser.add_argument("--host", type=str, default=os.getenv("HOST", "0.0.0.0"),
-                        help="Host del server (default: %(default)s)")
+                        help="Server host (default: %(default)s)")
     parser.add_argument("--model-tier", type=str, default=None,
                         choices=["auto", "flash", "pro"],
-                        help="Forza un tier modello per tutte le richieste (default: dal .env)")
+                        help="Force a model tier for all requests (default: from .env)")
     parser.add_argument("--deep", action="store_true",
                         help="Scorciatoia per --model-tier=pro")
     args = parser.parse_args()
@@ -1421,7 +1421,7 @@ if __name__ == "__main__":
         args.model_tier = "pro"
 
     if args.model_tier:
-        print(f"[Oracle] Model tier forzato: {args.model_tier}")
+        print(f"[Oracle] Model tier forced: {args.model_tier}")
         os.environ["MODEL_TIER"] = args.model_tier
 
     uvicorn.run(app, host=args.host, port=args.port)

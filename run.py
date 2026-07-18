@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
 """
-Oracle RUI Edition — Avvio unificato del sistema.
+Oracle RUI Edition — Unified system startup.
 
-Un solo comando per avviare l'intero ecosistema Oracle RUI:
+One command to start the entire Oracle RUI ecosystem:
 
   python run.py
 
-Componenti:
-  * Oracle Core (agente esecutivo + frontend)  — :8100
-  * Penelope (grafo della conoscenza)          — :5000  (opzionale)
-  * Archimede (motore dati grafo)              — :8001  (opzionale)
-  * Egida (guardrail HSD)                      — integrato in tutti i layer
+Components:
+  * Oracle Core (executive agent + frontend)  — :8100
+  * Penelope (knowledge graph)                — :5000  (optional)
+  * Archimede (graph data engine)             — :8001  (optional)
+  * Egida (HSD guardrail)                     — integrated across all layers
 
 Usage:
-    python run.py                              # Avvia Oracle Core (default)
-    python run.py --with-penelope              # Avvia anche Penelope (:5000)
-    python run.py --with-archimede             # Avvia anche Archimede (:8001)
-    python run.py --all                        # Avvia TUTTO
-    python run.py --port 8100                  # Porta personalizzata
-    python run.py --status                     # Verifica stato componenti
-    python run.py --init                       # Primo avvio: setup guidato
+    python run.py                              # Start Oracle Core (default)
+    python run.py --with-penelope              # Also start Penelope (:5000)
+    python run.py --with-archimede             # Also start Archimede (:8001)
+    python run.py --all                        # Start EVERYTHING
+    python run.py --port 8100                  # Custom port
+    python run.py --status                     # Check component status
+    python run.py --init                       # First run: guided setup
 
-Configurazione:
-    1. Copia oracle-rui/.env.example in oracle-rui/.env e configura le API key
-    2. Per Penelope: copia penelope/.env.example in penelope/.env
-    3. Per Archimede: copia archimede/.env.example in archimede/.env
-    4. (Opzionale) docker-compose up -d per avviare MariaDB
+Configuration:
+    1. Copy oracle-rui/.env.example to oracle-rui/.env and configure API keys
+    2. For Penelope: copy penelope/.env.example to penelope/.env
+    3. For Archimede: copy archimede/.env.example to archimede/.env
+    4. (Optional) docker-compose up -d to start MariaDB
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ logger = logging.getLogger("oracle-rui")
 
 
 def wait_for_server(url: str, timeout: int = 15, interval: float = 0.5) -> bool:
-    """Aspetta che un server risponda su un URL."""
+    """Wait for a server to respond on a URL."""
     import httpx
     start = time.time()
     while time.time() - start < timeout:
@@ -74,16 +74,16 @@ def wait_for_server(url: str, timeout: int = 15, interval: float = 0.5) -> bool:
 
 
 def start_penelope() -> subprocess.Popen | None:
-    """Avvia Penelope Web API (:5000) come sottoprocesso."""
+    """Start Penelope Web API (:5000) as a subprocess."""
     script = _PENELOPE_ROOT / "web" / "api.py"
     if not script.exists():
-        logger.warning("[WARN] Penelope API non trovata: %s", script)
+        logger.warning("[WARN] Penelope API not found: %s", script)
         return None
 
     log_file = _ROOT / "logs" / "penelope.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Avvio Penelope su :5000...")
+    logger.info("Starting Penelope on :5000...")
     try:
         proc = subprocess.Popen(
             [sys.executable, str(script)],
@@ -92,26 +92,26 @@ def start_penelope() -> subprocess.Popen | None:
             stderr=subprocess.STDOUT,
         )
         if wait_for_server("http://127.0.0.1:5000/api/stats", timeout=30):
-            logger.info("[OK] Penelope pronto su http://localhost:5000")
+            logger.info("[OK] Penelope ready on http://localhost:5000")
         else:
-            logger.warning("[WARN] Penelope avviato ma non risponde (log: %s)", log_file)
+            logger.warning("[WARN] Penelope started but not responding (log: %s)", log_file)
         return proc
     except Exception as e:
-        logger.error("[ERR] Errore avvio Penelope: %s", e)
+        logger.error("[ERR] Error starting Penelope: %s", e)
         return None
 
 
 def start_archimede() -> subprocess.Popen | None:
-    """Avvia Archimede API (:8001) come sottoprocesso."""
+    """Start Archimede API (:8001) as a subprocess."""
     script = _ARCHIMEDE_ROOT / "archimede" / "api.py"
     if not script.exists():
-        logger.warning("[WARN] Archimede API non trovata: %s", script)
+        logger.warning("[WARN] Archimede API not found: %s", script)
         return None
 
     log_file = _ROOT / "logs" / "archimede.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Avvio Archimede su :8001...")
+    logger.info("Starting Archimede on :8001...")
     try:
         proc = subprocess.Popen(
             [sys.executable, str(script), "--port", "8001"],
@@ -120,40 +120,40 @@ def start_archimede() -> subprocess.Popen | None:
             stderr=subprocess.STDOUT,
         )
         if wait_for_server("http://127.0.0.1:8001/archimede/health", timeout=20):
-            logger.info("[OK] Archimede pronto su :8001")
+            logger.info("[OK] Archimede ready on :8001")
         else:
-            logger.warning("[WARN] Archimede avviato ma non risponde (log: %s)", log_file)
+            logger.warning("[WARN] Archimede started but not responding (log: %s)", log_file)
         return proc
     except Exception as e:
-        logger.error("[ERR] Errore avvio Archimede: %s", e)
+        logger.error("[ERR] Error starting Archimede: %s", e)
         return None
 
 
 def print_banner(args: argparse.Namespace):
-    """Stampa il banner di avvio."""
+    """Print the startup banner."""
     print()
     print("  +--------------------------------------------------+")
     print("  |         O R A C L E   R U I   E d i t i o n      |")
-    print("  |     Ricerca * Unione * Intelligenza               |")
+    print("  |     Research * Union * Intelligence               |")
     print("  +--------------------------------------------------+")
-    print(f"  |  Porta:            {args.port:<31} |")
+    print(f"  |  Port:             {args.port:<31} |")
     print(f"  |  Oracle Core:      http://localhost:{args.port:<5}               |")
-    print(f"  |  Penelope:         {'attivo su :5000' if args.with_penelope else 'non avviato':<31} |")
-    print(f"  |  Archimede:        {'attivo su :8001' if args.with_archimede else 'non avviato':<31} |")
-    print(f"  |  Egida:            sempre attivo (guardrail HSD)  |")
+    print(f"  |  Penelope:         {'active on :5000' if args.with_penelope else 'not started':<31} |")
+    print(f"  |  Archimede:        {'active on :8001' if args.with_archimede else 'not started':<31} |")
+    print(f"  |  Egida:            always active (HSD guardrail)  |")
     print("  +--------------------------------------------------+")
     print()
 
 
 def check_status():
-    """Verifica lo stato di tutti i componenti."""
+    """Check the status of all components."""
     import httpx
 
     print()
     W = 52
     sep = "  +-" + "-" * W + "+"
     print(sep)
-    print("  |  " + "Oracle RUI Edition — Diagnostica".center(W) + "  |")
+    print("  |  " + "Oracle RUI Edition — Diagnostics".center(W) + "  |")
     print(sep)
 
     def line(label, ok, text=""):
@@ -173,44 +173,44 @@ def check_status():
         else:
             line("Oracle", False, f":8100 status={r.status_code}")
     except Exception:
-        line("Oracle", False, ":8100 — NON in esecuzione")
+        line("Oracle", False, ":8100 — NOT running")
 
     # Penelope :5000
     try:
         r = httpx.get("http://127.0.0.1:5000/api/stats", timeout=3.0)
         if r.status_code == 200:
             data = r.json()
-            line("Penelope", True, f":5000 ({data.get('total_nodes', '?')} nodi)")
+            line("Penelope", True, f":5000 ({data.get('total_nodes', '?')} nodes)")
         else:
             line("Penelope", False, f":5000 status={r.status_code}")
     except Exception:
-        line("Penelope", False, ":5000 — NON in esecuzione")
+        line("Penelope", False, ":5000 — NOT running")
 
     # Archimede :8001
     try:
         r = httpx.get("http://127.0.0.1:8001/archimede/health", timeout=2.0)
         if r.status_code == 200:
-            line("Archimede", True, ":8001 (grafo read-only)")
+            line("Archimede", True, ":8001 (read-only graph)")
         else:
             line("Archimede", False, f":8001 status={r.status_code}")
     except Exception:
-        line("Archimede", False, ":8001 — NON in esecuzione")
+        line("Archimede", False, ":8001 — NOT running")
 
     print(sep)
     print()
-    print("Suggerimenti:")
-    print("  * Avvio base:                 python run.py")
-    print("  * Con Penelope:               python run.py --with-penelope")
-    print("  * Con tutto:                  python run.py --all")
-    print("  * Stato dettagliato:          curl http://localhost:8100/api/health")
+    print("Tips:")
+    print("  * Basic startup:              python run.py")
+    print("  * With Penelope:              python run.py --with-penelope")
+    print("  * With everything:            python run.py --all")
+    print("  * Detailed status:            curl http://localhost:8100/api/health")
     print()
 
 
 def cmd_init():
-    """Setup guidato primo avvio."""
+    """Guided first-time setup."""
     print()
     print("=" * 60)
-    print("Oracle RUI Edition — Setup guidato")
+    print("Oracle RUI Edition — Guided Setup")
     print("=" * 60)
     print()
 
@@ -220,11 +220,11 @@ def cmd_init():
     if not oracle_env.exists() and oracle_env_example.exists():
         import shutil
         shutil.copy2(oracle_env_example, oracle_env)
-        print("[OK] Creato oracle-rui/.env da template")
-        print("     Modificalo per inserire la tua API key LLM:")
+        print("[OK] Created oracle-rui/.env from template")
+        print("     Edit it to insert your LLM API key:")
         print(f"     {oracle_env}")
     elif oracle_env.exists():
-        print("[OK] oracle-rui/.env gia' presente")
+        print("[OK] oracle-rui/.env already present")
 
     # 2. Penelope .env
     penelope_env = _PENELOPE_ROOT / ".env"
@@ -232,9 +232,9 @@ def cmd_init():
     if not penelope_env.exists() and penelope_env_example.exists():
         import shutil
         shutil.copy2(penelope_env_example, penelope_env)
-        print("[OK] Creato penelope/.env da template")
+        print("[OK] Created penelope/.env from template")
     elif penelope_env.exists():
-        print("[OK] penelope/.env gia' presente")
+        print("[OK] penelope/.env already present")
 
     # 3. Archimede .env
     archimede_env = _ARCHIMEDE_ROOT / ".env"
@@ -242,51 +242,51 @@ def cmd_init():
     if not archimede_env.exists() and archimede_env_example.exists():
         import shutil
         shutil.copy2(archimede_env_example, archimede_env)
-        print("[OK] Creato archimede/.env da template")
+        print("[OK] Created archimede/.env from template")
     elif archimede_env.exists():
-        print("[OK] archimede/.env gia' presente")
+        print("[OK] archimede/.env already present")
 
     # 4. Logs directory
     (_ROOT / "logs").mkdir(parents=True, exist_ok=True)
-    print("[OK] Directory logs/ creata")
+    print("[OK] Created logs/ directory")
 
     print()
-    print("Setup completato! Ora configura i file .env e poi avvia:")
+    print("Setup complete! Now configure the .env files and then start:")
     print("  python run.py --all")
     print()
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Oracle RUI Edition — Avvio unificato"
+        description="Oracle RUI Edition — Unified startup"
     )
     parser.add_argument("--port", type=int, default=8100,
-                        help="Porta per Oracle Core (default: 8100)")
+                        help="Oracle Core port (default: 8100)")
     parser.add_argument("--host", type=str, default="0.0.0.0",
-                        help="Host per Oracle Core")
+                        help="Oracle Core host")
     parser.add_argument("--with-penelope", action="store_true",
-                        help="Avvia anche Penelope API (:5000)")
+                        help="Also start Penelope API (:5000)")
     parser.add_argument("--with-archimede", action="store_true",
-                        help="Avvia anche Archimede API (:8001)")
+                        help="Also start Archimede API (:8001)")
     parser.add_argument("--all", action="store_true",
-                        help="Avvia TUTTI i componenti")
+                        help="Start ALL components")
     parser.add_argument("--status", "--check", action="store_true",
-                        help="Verifica stato componenti (senza avviare)")
+                        help="Check component status (without starting)")
     parser.add_argument("--init", action="store_true",
-                        help="Setup guidato primo avvio")
+                        help="Guided first-time setup")
     args = parser.parse_args()
 
-    # ── Setup guidato ─────────────────────────────────────────
+    # ── Guided setup ─────────────────────────────────────────
     if args.init:
         cmd_init()
         return
 
-    # ── Diagnostica ───────────────────────────────────────────
+    # ── Diagnostics ───────────────────────────────────────────
     if args.status:
         check_status()
         return
 
-    # ── --all attiva tutto ────────────────────────────────────
+    # ── --all enables everything ──────────────────────────────
     if args.all:
         args.with_penelope = True
         args.with_archimede = True
@@ -294,15 +294,15 @@ def main():
     penelope_proc: subprocess.Popen | None = None
     archimede_proc: subprocess.Popen | None = None
 
-    # ── 1. Penelope (opzionale) ──────────────────────────────
+    # ── 1. Penelope (optional) ──────────────────────────────
     if args.with_penelope:
         penelope_proc = start_penelope()
 
-    # ── 2. Archimede (opzionale) ─────────────────────────────
+    # ── 2. Archimede (optional) ─────────────────────────────
     if args.with_archimede:
         archimede_proc = start_archimede()
 
-    # ── 3. Avvia Oracle Core ─────────────────────────────────
+    # ── 3. Start Oracle Core ─────────────────────────────────
     print_banner(args)
 
     try:
@@ -315,11 +315,11 @@ def main():
 
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     except KeyboardInterrupt:
-        print("\n[Oracle RUI] Arresto in corso...")
+        print("\n[Oracle RUI] Shutting down...")
     finally:
         # Cleanup Penelope
         if penelope_proc:
-            logger.info("Arresto Penelope (PID: %d)...", penelope_proc.pid)
+            logger.info("Stopping Penelope (PID: %d)...", penelope_proc.pid)
             if sys.platform == "win32":
                 penelope_proc.send_signal(signal.CTRL_BREAK_EVENT)
             else:
@@ -328,11 +328,11 @@ def main():
                 penelope_proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 penelope_proc.kill()
-            logger.info("Penelope arrestato.")
+            logger.info("Penelope stopped.")
 
         # Cleanup Archimede
         if archimede_proc:
-            logger.info("Arresto Archimede (PID: %d)...", archimede_proc.pid)
+            logger.info("Stopping Archimede (PID: %d)...", archimede_proc.pid)
             if sys.platform == "win32":
                 archimede_proc.send_signal(signal.CTRL_BREAK_EVENT)
             else:
@@ -341,9 +341,9 @@ def main():
                 archimede_proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 archimede_proc.kill()
-            logger.info("Archimede arrestato.")
+            logger.info("Archimede stopped.")
 
-    print("[Oracle RUI] Arrivederci.")
+    print("[Oracle RUI] Goodbye.")
 
 
 if __name__ == "__main__":

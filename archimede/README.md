@@ -1,65 +1,65 @@
-# Archimede — Agente Passivo di Lettura, Navigazione e Identity Resolution per Penelope
+# Archimede — Passive Agent for Reading, Navigation, and Identity Resolution for Penelope
 
-**Archimede** è l'agente di interrogazione passiva del grafo **Penelope** all'interno del sistema **Oracle**. Legge, naviga e collega dati senza mai scrivere, modificare o eliminare nulla. Specializzato in **identity resolution** su grandi volumi di foto, utilizza InsightFace (ArcFace 512-dim) per il riconoscimento facciale interamente su CPU.
+**Archimede** is the passive query agent for the **Penelope** graph within the **Oracle** system. It reads, navigates, and links data without ever writing, modifying, or deleting anything. Specialized in **identity resolution** on large volumes of photos, it uses InsightFace (ArcFace 512-dim) for facial recognition entirely on CPU.
 
-> **Ruolo in Oracle:** Agente passivo, read-only, multimodale. Legge il grafo di conoscenza di Penelope (MariaDB + ChromaDB), esegue face matching su foto, e presenta i risultati all'utente su richiesta. Non esegue, non modifica, non elimina — solo SELECT.
+> **Role in Oracle:** Passive, read-only, multimodal agent. Reads Penelope's knowledge graph (MariaDB + ChromaDB), performs face matching on photos, and presents results to the user on request. Does not execute, modify, or delete — only SELECT.
 
 ---
 
-## Indice
+## Index
 
-1. [Panoramica](#panoramica)
-2. [Architettura](#architettura)
-3. [Componenti](#componenti)
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [Components](#components)
 4. [Identity Resolution](#identity-resolution)
-5. [Utilizzo](#utilizzo)
-6. [Struttura del Progetto](#struttura-del-progetto)
-7. [Modelli Dati](#modelli-dati)
-8. [Installazione](#installazione)
-9. [Configurazione](#configurazione)
-10. [Test](#test)
+5. [Usage](#usage)
+6. [Project Structure](#project-structure)
+7. [Data Models](#data-models)
+8. [Installation](#installation)
+9. [Configuration](#configuration)
+10. [Testing](#testing)
 
 ---
 
-## Panoramica
+## Overview
 
-Archimede è un agente **read-only** che opera sul grafo **Penelope**, il database di memoria di Oracle. Le sue capacità principali:
+Archimede is a **read-only** agent operating on the **Penelope** graph, Oracle's memory database. Its core capabilities:
 
-- **Leggere** il grafo Penelope (MariaDB) — solo query SELECT
-- **Interrogare** la ChromaDB di Penelope per embedding immagini
-- **Riconoscere volti** con InsightFace ArcFace 512-dim su CPU
-- **Trovare foto di coppia** dei genitori in grandi raccolte fotografiche
-- **Generare report HTML** navigabili con galleria foto e statistiche
-- **Fare clustering interattivo** di volti per identificare persone sconosciute
-- **Non scrivere mai** — nessuna operazione di modifica, cancellazione o inserimento
+- **Read** the Penelope graph (MariaDB) — only SELECT queries
+- **Query** Penelope's ChromaDB for image embeddings
+- **Recognize faces** with InsightFace ArcFace 512-dim on CPU
+- **Find couple photos** of parents in large photo collections
+- **Generate navigable HTML reports** with photo gallery and statistics
+- **Interactive face clustering** to identify unknown people
+- **Never write** — no modify, delete, or insert operations
 
-### Principio Fondamentale
+### Core Principle
 
 ```
-ARCHIMEDE NON SCRIVE MAI
+ARCHIMEDE NEVER WRITES
 ```
 
-Tutte le query sono strettamente `SELECT` o `WITH`. Qualsiasi tentativo di scrittura viene bloccato a livello di architettura.
+All queries are strictly `SELECT` or `WITH`. Any write attempt is blocked at the architecture level.
 
 ---
 
-## Architettura
+## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        ARCHIMEDE QUERY (CLI)                        │
 │                     (archimede/query.py)                             │
-│   Entry point: python -m archimede.query <comando> [opzioni]        │
+│   Entry point: python -m archimede.query <command> [options]        │
 └──────┬───────────────────────────────────────────────────────────────┘
        │
-       ├── Comando: stats
-       │   → Statistiche del grafo Penelope
+       ├── Command: stats
+       │   → Penelope graph statistics
        │
-       └── Comando: find-parents
-           → Ricerca foto di coppia dei genitori
+       └── Command: find-parents
+           → Search for parent couple photos
               │
-              ├── Modalità --ref-dir    (carica referenze da cartella)
-              └── Modalità --interactive (clustering interattivo volti)
+              ├── --ref-dir mode    (load references from folder)
+              └── --interactive mode (interactive face clustering)
                     │
                     ▼
        ┌─────────────────────────────────────────────────────┐
@@ -79,13 +79,13 @@ Tutte le query sono strettamente `SELECT` o `WITH`. Qualsiasi tentativo di scrit
        │                                                     │
        │  ┌─────────────────────────────────────────────┐    │
        │  │           PRESENTATION LAYER                 │    │
-       │  │  report.py → HTML report con galleria foto  │    │
+       │  │  report.py → HTML report with photo gallery │    │
        │  └─────────────────────────────────────────────┘    │
        └─────────────────────────────────────────────────────┘
                               │
                               ▼
        ┌─────────────────────────────────────────────────────┐
-       │              PENELOPE (sistema esterno)              │
+       │              PENELOPE (external system)              │
        │                                                     │
        │  ┌──────────────┐          ┌──────────────────┐     │
        │  │   MariaDB    │          │    ChromaDB       │     │
@@ -94,123 +94,123 @@ Tutte le query sono strettamente `SELECT` o `WITH`. Qualsiasi tentativo di scrit
        └─────────────────────────────────────────────────────┘
 ```
 
-### Flusso Operativo
+### Operation Flow
 
-#### Comando `stats`
+#### `stats` Command
 
 ```
 1. PenelopeGraphReader.connect() → MariaDB
-2. Query: COUNT(*) foto indicizzate
-3. Query: nodi Person (con/senza InsightFace, YOLO)
-4. Query: foto con face_count
-5. Stampa statistiche aggregate
+2. Query: COUNT(*) indexed photos
+3. Query: Person nodes (with/without InsightFace, YOLO)
+4. Query: photos with face_count
+5. Print aggregate statistics
 ```
 
-#### Comando `find-parents` (con `--ref-dir`)
+#### `find-parents` Command (with `--ref-dir`)
 
 ```
-1. Carica foto referenza da ref_faces/papa/, ref_faces/mamma/
-2. Per ogni referenza: rileva volti con InsightFace → embedding medio
-3. Legge foto dal grafo Penelope (tutte o per directory)
-4. Per ogni foto:
-   a. Rileva volti con InsightFace
-   b. Confronta embedding con referenze (similarità coseno)
-   c. Se soglia > 0.35 → match
-5. Trova foto dove ENTRAMBI i genitori appaiono insieme
-6. Genera report HTML con galleria foto
+1. Load reference photos from ref_faces/dad/, ref_faces/mom/
+2. For each reference: detect faces with InsightFace → average embedding
+3. Read photos from Penelope graph (all or by directory)
+4. For each photo:
+   a. Detect faces with InsightFace
+   b. Compare embeddings with references (cosine similarity)
+   c. If threshold > 0.35 → match
+5. Find photos where BOTH parents appear together
+6. Generate HTML report with photo gallery
 ```
 
-#### Comando `find-parents` (con `--interactive`)
+#### `find-parents` Command (with `--interactive`)
 
 ```
-1. Legge foto con face_count da Penelope
-2. Rileva volti e embedding per le prime 200 foto
-3. Clustering greedy per similarità coseno (soglia 0.4)
-4. Mostra cluster all'utente e chiede: "Chi è? (papa/mamma/salta)"
-5. Una volta identificati entrambi → procede con la ricerca
+1. Read photos with face_count from Penelope
+2. Detect faces and embeddings for first 200 photos
+3. Greedy clustering by cosine similarity (threshold 0.4)
+4. Show clusters to user and ask: "Who is this? (dad/mom/skip)"
+5. Once both are identified → proceed with search
 ```
 
 ---
 
-## Componenti
+## Components
 
 ### Graph Reader (`graph/`)
 
 #### PenelopeGraphReader
 
-Wrapper read-only attorno a `MariaDBStore` di Penelope. Ottiene le credenziali via keyring di sistema (come fa Penelope).
+Read-only wrapper around Penelope's `MariaDBStore`. Gets credentials via system keyring (same as Penelope).
 
-- **Solo SELECT** — qualsiasi query non-SELECT solleva RuntimeError
-- **Connessione automatica** — cerca la directory Penelope, carica il suo `.env`, importa `MariaDBStore`
-- **Query pubbliche:**
-  - `count_photos()` — totale foto indicizzate
-  - `get_all_photos(limit, offset)` — tutte le foto con metadati
-  - `get_photos_in_directory(directory)` — foto in una directory specifica
-  - `get_photos_with_face_count()` — foto con metadati face_count
-  - `get_person_nodes(source)` — nodi Person, opzionalmente filtrati per source
-  - `get_edges_for_photo(photo_node_id)` — archi entità per una foto
-  - `get_persons_in_photo(photo_node_id)` — persone collegate a una foto
+- **SELECT only** — any non-SELECT query raises RuntimeError
+- **Auto-connection** — searches Penelope directory, loads its `.env`, imports `MariaDBStore`
+- **Public queries:**
+  - `count_photos()` — total indexed photos
+  - `get_all_photos(limit, offset)` — all photos with metadata
+  - `get_photos_in_directory(directory)` — photos in a specific directory
+  - `get_photos_with_face_count()` — photos with face_count metadata
+  - `get_person_nodes(source)` — Person nodes, optionally filtered by source
+  - `get_edges_for_photo(photo_node_id)` — entity edges for a photo
+  - `get_persons_in_photo(photo_node_id)` — people linked to a photo
 
 #### PenelopeChromaReader
 
-Reader read-only della ChromaDB di Penelope per query su embedding immagini.
+Read-only reader of Penelope's ChromaDB for image embedding queries.
 
-- **Solo query** — nessuna scrittura su ChromaDB
-- **Cerca automaticamente** la persistenza ChromaDB di Penelope
-- **Metodi:**
-  - `get_collections()` — collezioni disponibili
-  - `query_images(query_embedding, top_k)` — ricerca per similarità
-  - `count_images()` — immagini indicizzate
+- **Query only** — no writing to ChromaDB
+- **Auto-search** Penelope's ChromaDB persistence
+- **Methods:**
+  - `get_collections()` — available collections
+  - `query_images(query_embedding, top_k)` — similarity search
+  - `count_images()` — indexed images
 
 ### Identity Engine (`identity/`)
 
 #### Face Engine (`face_engine.py`)
 
-Motore di riconoscimento facciale basato su **InsightFace** (modello `buffalo_l`).
+Face recognition engine based on **InsightFace** (`buffalo_l` model).
 
-- **ArcFace 512-dim** — embeddings facciali 512-dimensionali
-- **CPU-only** — funziona interamente su CPU (i3 10th gen testato)
-- **Modello leggero** — buffalo_l: 30MB (detection + recognition + age/gender)
-- **Lazy loading** — il modello si carica al primo uso
+- **ArcFace 512-dim** — 512-dimensional facial embeddings
+- **CPU-only** — runs entirely on CPU (i3 10th gen tested)
+- **Lightweight model** — buffalo_l: 30MB (detection + recognition + age/gender)
+- **Lazy loading** — model loads on first use
 
-**Funzioni:**
-- `detect_faces(image_path)` → lista volti con bbox, embedding 512-dim, det_score, gender, age, landmark
-- `cosine_similarity(a, b)` → similarità coseno tra due embedding
-- `verify(emb1, emb2, threshold)` → confronto con soglia (default 0.35)
+**Functions:**
+- `detect_faces(image_path)` → list of faces with bbox, 512-dim embedding, det_score, gender, age, landmarks
+- `cosine_similarity(a, b)` → cosine similarity between two embeddings
+- `verify(emb1, emb2, threshold)` → comparison with threshold (default 0.35)
 
 #### Matcher (`matcher.py`)
 
-Sistema di face matching per cercare foto di persone specifiche in grandi raccolte.
+Face matching system to search for specific people's photos in large collections.
 
-- **Caricamento referenze** da directory strutturate (`papa/`, `mamma/`)
-- **Embedding medio** per robustezza (più foto = embedding più stabile)
-- **Ricerca foto di coppia** — trova foto con ENTRAMBI i genitori
-- **Progress callback** — callback per monitorare l'avanzamento su grandi volumi
+- **Reference loading** from structured directories (`dad/`, `mom/`)
+- **Average embedding** for robustness (more photos = more stable embedding)
+- **Couple photo search** — finds photos with BOTH parents
+- **Progress callback** — callback to monitor progress on large volumes
 
 ### Presentation Layer (`presentation/`)
 
 #### Report Generator (`report.py`)
 
-Genera pagine HTML navigabili con:
-- **Statistiche** in cards colorate (foto scansionate, volti, coppie)
-- **Galleria foto di coppia** con badge 💑
-- **Sezioni per singolo genitore** con foto rimanenti
-- **Lightbox** per visualizzazione ingrandita
-- **Thumbnail** via OpenCV con data URI (no file temporanei)
-- **Design dark** responsivo con gradienti
+Generates navigable HTML pages with:
+- **Statistics** in colored cards (scanned photos, faces, couples)
+- **Couple photo gallery** with 💑 badge
+- **Individual parent sections** with remaining photos
+- **Lightbox** for enlarged viewing
+- **Thumbnails** via OpenCV with data URI (no temp files)
+- **Responsive dark design** with gradients
 
 ### Models (`models.py`)
 
-Modelli dati Pydantic-style (dataclass) per Archimede in Oracle:
+Pydantic-style data models (dataclass) for Archimede in Oracle:
 
-| Modello | Descrizione |
+| Model | Description |
 |---------|-------------|
-| **Photo** | Foto indicizzata nel grafo Penelope (node_id, file_path, face_count, metadata) |
-| **DetectedFace** | Volto rilevato (bbox, embedding 512-dim, confidence, gender, age) |
-| **ReferenceFace** | Volto di referenza (nome, embedding medio, source_photos) |
-| **FaceMatch** | Risultato matching (reference_name, similarity, is_match, bbox) |
-| **PhotoMatchResult** | Risultato per una foto (faces, matches, is_couple) |
-| **SearchReport** | Report completo (couple_photos, single_parent_photos, duration) |
+| **Photo** | Indexed photo in Penelope graph (node_id, file_path, face_count, metadata) |
+| **DetectedFace** | Detected face (bbox, 512-dim embedding, confidence, gender, age) |
+| **ReferenceFace** | Reference face (name, average embedding, source_photos) |
+| **FaceMatch** | Match result (reference_name, similarity, is_match, bbox) |
+| **PhotoMatchResult** | Result for a photo (faces, matches, is_couple) |
+| **SearchReport** | Complete report (couple_photos, single_parent_photos, duration) |
 
 ---
 
@@ -218,105 +218,105 @@ Modelli dati Pydantic-style (dataclass) per Archimede in Oracle:
 
 ### InsightFace ArcFace 512-dim
 
-Archimede utilizza **InsightFace** con il modello `buffalo_l` per il riconoscimento facciale:
+Archimede uses **InsightFace** with the `buffalo_l` model for face recognition:
 
-| Caratteristica | Valore |
+| Feature | Value |
 |----------------|--------|
-| **Modello** | buffalo_l (30MB) |
-| **Embedding** | 512-dimensionale normalizzato |
+| **Model** | buffalo_l (30MB) |
+| **Embedding** | 512-dimensional normalized |
 | **Detection** | RetinaFace-based |
 | **Recognition** | ArcFace |
 | **Extra** | Age estimation, Gender estimation, Landmarks |
-| **Esecuzione** | CPU (CPUExecutionProvider) |
-| **Threshold default** | 0.35 (similarità coseno) |
+| **Execution** | CPU (CPUExecutionProvider) |
+| **Default threshold** | 0.35 (cosine similarity) |
 
-### Soglia di Similarità
+### Similarity Threshold
 
-| Soglia | Comportamento |
+| Threshold | Behavior |
 |--------|---------------|
-| **0.30** | Più tollerante (più falsi positivi, meno falsi negativi) |
-| **0.35** | Default — bilanciato |
-| **0.40** | Più severo (meno falsi positivi, più falsi negativi) |
-| **0.50** | Molto severo — solo match molto forti |
+| **0.30** | More permissive (more false positives, fewer false negatives) |
+| **0.35** | Default — balanced |
+| **0.40** | Stricter (fewer false positives, more false negatives) |
+| **0.50** | Very strict — only very strong matches |
 
-### Strategia di Matching
+### Matching Strategy
 
-1. **Embedding medio** — per ogni persona, si calcola la media degli embedding di tutte le foto di referenza, normalizzata a norma unitaria
-2. **Similarità coseno** — confronto tra embedding del volto rilevato e embedding medio della referenza
-3. **Match se soglia superata** — se similarità > threshold, la foto contiene quella persona
-4. **Foto di coppia** — se TUTTE le referenze hanno almeno un match nella stessa foto
+1. **Average embedding** — for each person, compute the average of all reference photo embeddings, normalized to unit norm
+2. **Cosine similarity** — compare detected face embedding with reference average embedding
+3. **Match if threshold exceeded** — if similarity > threshold, the photo contains that person
+4. **Couple photo** — if ALL references have at least one match in the same photo
 
 ---
 
-## Utilizzo
+## Usage
 
-### Query Engine (CLI principale)
+### Query Engine (main CLI)
 
 ```bash
-# Statistiche del grafo Penelope
+# Penelope graph statistics
 python -m archimede.query stats
 
-# Ricerca foto di coppia con referenze
+# Couple photo search with references
 python -m archimede.query find-parents --ref-dir ref_faces/
 
-# Con limite di foto
+# With photo limit
 python -m archimede.query find-parents --ref-dir ref_faces/ --limit 200
 
-# In una directory specifica
+# In a specific directory
 python -m archimede.query find-parents --ref-dir ref_faces/ --directory "MyPhotos"
 
-# Con soglia personalizzata
+# With custom threshold
 python -m archimede.query find-parents --ref-dir ref_faces/ --threshold 0.40
 
-# Modalità interattiva (clustering volti)
+# Interactive mode (face clustering)
 python -m archimede.query find-parents --interactive
 
-# Output HTML personalizzato
-python -m archimede.query find-parents --ref-dir ref_faces/ --output "results/miei_genitori.html"
+# Custom HTML output
+python -m archimede.query find-parents --ref-dir ref_faces/ --output "results/my_parents.html"
 ```
 
-### Struttura Directory Referenze
+### Reference Directory Structure
 
 ```
 ref_faces/
-├── papa/
-│   ├── foto1.jpg
-│   ├── foto2.jpg       (opzionale, più foto = embedding più robusto)
+├── dad/
+│   ├── photo1.jpg
+│   ├── photo2.jpg       (optional, more photos = more robust embedding)
 │   └── ...
-└── mamma/
-    ├── foto1.jpg
-    ├── foto2.jpg
+└── mom/
+    ├── photo1.jpg
+    ├── photo2.jpg
     └── ...
 ```
 
-### Modalità Interattiva
+### Interactive Mode
 
-Se non hai foto di referenza pronte, Archimede può:
-1. Scansionare le prime 200 foto con volti rilevati
-2. Clusterizzare i volti simili (greedy clustering, soglia 0.4)
-3. Mostrarti i cluster e chiederti "Chi è? (papa/mamma/salta)"
-4. Una volta identificati entrambi i genitori → procedere con la ricerca
+If you don't have reference photos ready, Archimede can:
+1. Scan the first 200 photos with detected faces
+2. Cluster similar faces (greedy clustering, threshold 0.4)
+3. Show you the clusters and ask "Who is this? (dad/mom/skip)"
+4. Once both parents are identified → proceed with search
 
 ---
 
-## Struttura del Progetto
+## Project Structure
 
 ```
 Oracle/Archimede/
-├── pyproject.toml                 # Package Python
-├── README.md                      # Questo file
-├── .env                           # Configurazione
-├── .env.example                   # Template configurazione
-├── yolov8n.pt                     # Modello YOLOv8 (legacy)
+├── pyproject.toml                 # Python package
+├── README.md                      # This file
+├── .env                           # Configuration
+├── .env.example                   # Configuration template
+├── yolov8n.pt                     # YOLOv8 model (legacy)
 │
-├── archimede/                     # Package principale
-│   ├── __init__.py                # Versione 0.2.0 + docstring ruolo
-│   ├── query.py                   # CLI entry point + orchestrazione
-│   ├── config.py                  # Configurazione
-│   ├── models.py                  # Modelli dati (Photo, FaceMatch, etc.)
-│   ├── log_setup.py               # Logging strutturato
+├── archimede/                     # Main package
+│   ├── __init__.py                # Version 0.2.0 + role docstring
+│   ├── query.py                   # CLI entry point + orchestration
+│   ├── config.py                  # Configuration
+│   ├── models.py                  # Data models (Photo, FaceMatch, etc.)
+│   ├── log_setup.py               # Structured logging
 │   │
-│   ├── graph/                     # Lettura grafo Penelope
+│   ├── graph/                     # Penelope graph reading
 │   │   ├── reader.py              #   PenelopeGraphReader (MariaDB, SELECT-only)
 │   │   └── chroma_reader.py       #   PenelopeChromaReader (ChromaDB, read-only)
 │   │
@@ -324,87 +324,87 @@ Oracle/Archimede/
 │   │   ├── face_engine.py         #   InsightFace (ArcFace 512-dim, CPU)
 │   │   └── matcher.py             #   Face matching + couple search
 │   │
-│   └── presentation/              # Presentazione risultati
-│       └── report.py              #   Generazione report HTML con galleria
+│   └── presentation/              # Results presentation
+│       └── report.py              #   HTML report generation with gallery
 │
 ├── tests/                         # Test suite
-│   ├── test_chroma_reader.py      #   Test ChromaDB reader
-│   ├── test_face_engine.py        #   Test face detection
-│   ├── test_graph_reader.py       #   Test MariaDB reader
-│   ├── test_matcher.py            #   Test face matching
-│   ├── test_query.py              #   Test CLI query
-│   └── test_report.py             #   Test report generation
+│   ├── test_chroma_reader.py      #   ChromaDB reader tests
+│   ├── test_face_engine.py        #   Face detection tests
+│   ├── test_graph_reader.py       #   MariaDB reader tests
+│   ├── test_matcher.py            #   Face matching tests
+│   ├── test_query.py              #   CLI query tests
+│   └── test_report.py             #   Report generation tests
 │
-└── data/                          # Dati di runtime
-    ├── chroma/                    #   ChromaDB locale
+└── data/                          # Runtime data
+    ├── chroma/                    #   Local ChromaDB
     ├── logs/                      #   Log files
-    └── results/                   #   Report HTML generati
+    └── results/                   #   Generated HTML reports
 ```
 
 ---
 
-## Modelli Dati
+## Data Models
 
-Tutti i dati sono modellati con `dataclass` in `archimede/models.py`:
+All data is modeled with `dataclass` in `archimede/models.py`:
 
 ### Photo
 ```python
 @dataclass
 class Photo:
-    node_id: str                  # ID nodo nel grafo Penelope
-    file_path: str                # Path assoluto nel filesystem
-    file_name: str                # Nome file
+    node_id: str                  # Node ID in Penelope graph
+    file_path: str                # Absolute path in filesystem
+    file_name: str                # File name
     mime_type: str                # "image/jpeg", etc.
-    size_bytes: int               # Dimensione in byte
-    sha256: str                   # Hash SHA-256
-    device: str                   # Dispositivo di origine
-    date_taken: str               # Data EXIF
-    face_count: int               # Numero volti rilevati
-    metadata: dict                # Metadati aggiuntivi
+    size_bytes: int               # Size in bytes
+    sha256: str                   # SHA-256 hash
+    device: str                   # Source device
+    date_taken: str               # EXIF date
+    face_count: int               # Number of detected faces
+    metadata: dict                # Additional metadata
 ```
 
 ### DetectedFace
 ```python
 @dataclass
 class DetectedFace:
-    photo_path: str               # Path foto originale
-    photo_node_id: str            # ID nodo foto
+    photo_path: str               # Original photo path
+    photo_node_id: str            # Photo node ID
     bbox: list[int]               # [x1, y1, x2, y2]
     confidence: float             # Confidence score
     embedding: list[float] | None # 512-dim ArcFace
     gender: int | None            # 0=F, 1=M
-    age: float | None             # Età stimata
-    person_node_id: str | None    # Nodo Person in Penelope (se esiste)
+    age: float | None             # Estimated age
+    person_node_id: str | None    # Person node in Penelope (if exists)
 ```
 
 ### SearchReport
 ```python
 @dataclass
 class SearchReport:
-    query_name: str               # Nome della ricerca
-    reference_names: list[str]    # ["papa", "mamma"]
-    similarity_threshold: float   # Soglia usata (default 0.35)
-    photos_scanned: int           # Foto totali scansionate
-    photos_with_faces: int        # Foto con almeno un volto
-    couple_photos: list           # Foto con entrambi i genitori
-    single_parent_photos: dict    # Foto per singolo genitore
-    all_results: list             # Tutti i risultati
-    duration_seconds: float       # Durata totale
-    generated_at: str             # Timestamp generazione
+    query_name: str               # Search name
+    reference_names: list[str]    # ["dad", "mom"]
+    similarity_threshold: float   # Threshold used (default 0.35)
+    photos_scanned: int           # Total photos scanned
+    photos_with_faces: int        # Photos with at least one face
+    couple_photos: list           # Photos with both parents
+    single_parent_photos: dict    # Photos per individual parent
+    all_results: list             # All results
+    duration_seconds: float       # Total duration
+    generated_at: str             # Generation timestamp
 ```
 
 ---
 
-## Installazione
+## Installation
 
-### 1. Clona il repository
+### 1. Clone the repository
 
 ```bash
-git clone <url-del-repository>
+git clone <repo-url>
 cd Oracle/Archimede
 ```
 
-### 2. Crea un ambiente virtuale (consigliato)
+### 2. Create a virtual environment (recommended)
 
 ```bash
 python -m venv .venv
@@ -412,68 +412,68 @@ python -m venv .venv
 source .venv/bin/activate  # Linux/Mac
 ```
 
-### 3. Installa il package
+### 3. Install the package
 
 ```bash
-# Core (leggero)
+# Core (lightweight)
 pip install -e .
 
-# Con face recognition
+# With face recognition
 pip install -e ".[vision]"
 
-# Con tutte le dipendenze
+# With all dependencies
 pip install -e ".[dev]"
 ```
 
-### 4. Configura l'ambiente
+### 4. Configure the environment
 
 ```bash
 copy .env.example .env    # Windows
 cp .env.example .env      # Linux/Mac
 ```
 
-Assicurati che il sistema **Penelope** sia configurato e accessibile (Archimede legge il suo `.env` per le credenziali MariaDB).
+Make sure the **Penelope** system is configured and accessible (Archimede reads its `.env` for MariaDB credentials).
 
 ---
 
-## Configurazione
+## Configuration
 
-Archimede legge la configurazione da file `.env`:
+Archimede reads configuration from `.env` file:
 
 ```ini
 # ── Penelope ──
-# Archimede ottiene le credenziali MariaDB dal .env di Penelope
-# (cercato automaticamente in ../Penelope/.env o Penelope/.env)
+# Archimede gets MariaDB credentials from Penelope's .env
+# (auto-searched in ../Penelope/.env or Penelope/.env)
 
 # ── Face Recognition ──
-# InsightFace buffalo_l viene scaricato automaticamente al primo uso
-# (richiede connessione Internet per il download iniziale)
+# InsightFace buffalo_l is auto-downloaded on first use
+# (requires Internet connection for initial download)
 ```
 
-Archimede **non ha una propria configurazione MariaDB** — usa le credenziali di Penelope via keyring di sistema.
+Archimede **does not have its own MariaDB configuration** — it uses Penelope's credentials via system keyring.
 
 ---
 
-## Test
+## Testing
 
 ```bash
-# Esegui tutti i test
+# Run all tests
 pytest tests/ -v
 
-# Test specifici
+# Specific tests
 pytest tests/test_face_engine.py -v
 pytest tests/test_matcher.py -v
 pytest tests/test_graph_reader.py -v
 pytest tests/test_query.py -v
 pytest tests/test_report.py -v
 
-# Con output dettagliato
+# Verbose output
 pytest tests/ -v --tb=short
 ```
 
 ---
 
-## Requisiti
+## Requirements
 
 ### Core
 - Python 3.10+
@@ -493,28 +493,28 @@ pytest tests/ -v --tb=short
 
 ---
 
-## Note Tecniche
+## Technical Notes
 
-- **Hardware testato**: i3 10th gen, 8GB RAM, GPU integrata — InsightFace gira interamente su CPU
-- **InsightFace buffalo_l**: ~30MB, si scarica automaticamente al primo `detect_faces()`
-- **Threshold default 0.35**: bilanciato per ArcFace 512-dim su foto reali
-- **Penelope**: Archimede presuppone che Penelope sia già configurato e abbia scansito le foto
-- **Read-only**: garantito dal PenelopeGraphReader che blocca qualsiasi query non-SELECT
-- **Connessione**: le credenziali MariaDB vengono lette dal `.env` di Penelope via keyring
-
----
-
-## Note sulla Serie
-
-A differenza del sistema Samaritan in *Person of Interest* (un'ASI di sorveglianza e controllo), Archimede:
-- ✅ È **read-only** — non esegue azioni, non manipola, non elimina
-- ✅ Ha l'**etica operativa di The Machine** — protezione, non controllo
-- ✅ È **trasparente** — ogni operazione è loggata e ispezionabile
-- ✅ È **locale** — opera solo sui dati già presenti in Penelope
-- ✅ È **passivo** — risponde a richieste, non agisce autonomamente
-
-*"Non esegue, non modifica, non elimina nulla. Solo lettura e presentazione all'utente su richiesta."*
+- **Tested hardware**: i3 10th gen, 8GB RAM, integrated GPU — InsightFace runs entirely on CPU
+- **InsightFace buffalo_l**: ~30MB, auto-downloads on first `detect_faces()`
+- **Default threshold 0.35**: balanced for ArcFace 512-dim on real photos
+- **Penelope**: Archimede assumes Penelope is already configured and has scanned photos
+- **Read-only**: guaranteed by PenelopeGraphReader blocking any non-SELECT query
+- **Connection**: MariaDB credentials read from Penelope's `.env` via keyring
 
 ---
 
-*Archimede v0.2.0 — Agente Passivo di Identity Resolution per Oracle*
+## Notes on the Series
+
+Unlike the Samaritan system in *Person of Interest* (an ASI of surveillance and control), Archimede:
+- ✅ Is **read-only** — does not execute actions, does not manipulate, does not delete
+- ✅ Has **The Machine's operational ethics** — protection, not control
+- ✅ Is **transparent** — every operation is logged and inspectable
+- ✅ Is **local** — operates only on data already in Penelope
+- ✅ Is **passive** — responds to requests, does not act autonomously
+
+*"Does not execute, does not modify, does not delete. Only reading and presentation to the user on request."*
+
+---
+
+*Archimede v0.2.0 — Passive Identity Resolution Agent for Oracle*

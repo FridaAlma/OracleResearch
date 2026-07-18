@@ -1,354 +1,354 @@
-# Oracle — Architettura e Stato Attuale
+# Oracle — Architecture and Current Status
 
-## Obiettivo
+## Objective
 
-Oracle nasce dal bisogno di unificare l'enorme mole di dati personali eterogenei di Toni (documenti, foto, video, progetti, script) sparsi su più dispositivi, in un unico grafo navigabile e interrogabile — analogo concettualmente a quello che Palantir fa per clienti governativi o enterprise, ma applicato interamente a dati locali e personali.
+Oracle was born from the need to unify Toni's enormous amount of heterogeneous personal data (documents, photos, videos, projects, scripts) scattered across multiple devices, into a single navigable and queryable graph — conceptually analogous to what Palantir does for government or enterprise clients, but applied entirely to local and personal data.
 
-L'idea centrale: dati eterogenei diventano molto più utili quando collegati in un unico grafo di entità, perché permettono di scoprire relazioni e informazioni che un umano non noterebbe guardando le fonti separatamente.
+The core idea: heterogeneous data becomes far more useful when linked into a single entity graph, because it enables discovering relationships and information that a human would not notice by looking at sources separately.
 
-## Mapping concettuale
+## Conceptual Mapping
 
-| Palantir | Oracle | Ruolo |
+| Palantir | Oracle | Role |
 |---|---|---|
-| Gotham / Foundry | **Penelope** | Ingestione e fusione di dati eterogenei in un grafo unico |
-| (layer di lettura analista) | **Archimede** | Lettura passiva e navigazione del grafo |
-| (layer applicativo/AIP) | **Oracle** | Orchestratore + agente esecutivo (coding, OSINT, ricerca) |
-| Apollo | **Egida** | Guardrail contro l'esposizione di dati sensibili (HSD) |
+| Gotham / Foundry | **Penelope** | Ingestion and fusion of heterogeneous data into a unified graph |
+| (analyst read layer) | **Archimede** | Passive reading and graph navigation |
+| (application layer/AIP) | **Oracle** | Orchestrator + executive agent (coding, OSINT, research) |
+| Apollo | **Egida** | Guardrail against sensitive data exposure (HSD) |
 
 ---
 
-## 1. Penelope — Ingestion & Grafo
+## 1. Penelope — Ingestion & Graph
 
-Strato di ingestione e fusione. Si occupa di:
-- Ingestione di dati eterogenei: immagini, documenti (PDF/markdown/testo), video/audio, directory/script di progetto
-- Fusione da dispositivi diversi: laptop main, headless Linux (storage), HDD esterno 1TB
-- Identity/entity resolution: riconoscere che la stessa entità appare in fonti diverse e collegarla come unico nodo nel grafo
+Ingestion and fusion layer. Handles:
+- Ingestion of heterogeneous data: images, documents (PDF/markdown/text), video/audio, project directories/scripts
+- Fusion from different devices: main laptop, headless Linux (storage), 1TB external HDD
+- Identity/entity resolution: recognizing that the same entity appears in different sources and linking it as a single node in the graph
 
-### Stack tecnico
+### Technical Stack
 
-| Componente | Ruolo | Stato |
+| Component | Role | Status |
 |---|---|---|
-| **MariaDB** (Proxmox, Celeron 2GB) | Anagrafica: nodi, archi, file_registry, coda di elaborazione | ✅ **8.908 nodi, 10.344 archi** |
-| **NetworkX** (in-memory) | Bridge lettura/scrittura con MariaDB, query grafo, merge nodi | ✅ Operativo |
-| **ChromaDB** (persistente locale) | Embedding semantico (MiniLM 384-dim + CLIP 512-dim) | ✅ **264+ documenti + immagini indicizzati** |
-| **Egida** | Filtri HSD a monte dell'ingestione | ✅ **130+ entry in quarantena** |
+| **MariaDB** (Proxmox, Celeron 2GB) | Registry: nodes, edges, file_registry, processing queue | ✅ **8,908 nodes, 10,344 edges** |
+| **NetworkX** (in-memory) | Read/write bridge to MariaDB, graph queries, node merging | ✅ Operational |
+| **ChromaDB** (local persistent) | Semantic embedding (MiniLM 384-dim + CLIP 512-dim) | ✅ **264+ documents + images indexed** |
+| **Egida** | HSD filters upstream of ingestion | ✅ **130+ quarantine entries** |
 
-### Moduli implementati
+### Implemented Modules
 
 #### `db/` — Database layer
-- **`schema.sql`** — 4 tabelle: `nodes` (5 type ENUM: File, Project, Person, Location, Event), `edges` (7 relazioni), `file_registry`, `ingestion_queue`
-- **`mariadb_store.py`** — CRUD completo: nodi, archi (con foreign key CASCADE), file_registry, coda con dequeue e mark_done, reset_stale_processing per crash recovery
-- **`graph_bridge.py`** — Sincronizzazione bidirezionale NetworkX ↔ MariaDB, query vicini, cammino minimo, merge nodi (identity resolution), subgraph filtering
-- **`chroma_store.py`** — Due collezioni: `file_embeddings` (MiniLM 384-dim per testo) e `image_embeddings` (CLIP 512-dim per immagini). Ricerca semantica cross-modale. Fallback graceful se CLIP non disponibile
+- **`schema.sql`** — 4 tables: `nodes` (5 type ENUM: File, Project, Person, Location, Event), `edges` (7 relations), `file_registry`, `ingestion_queue`
+- **`mariadb_store.py`** — Full CRUD: nodes, edges (with foreign key CASCADE), file_registry, queue with dequeue and mark_done, reset_stale_processing for crash recovery
+- **`graph_bridge.py`** — Bidirectional sync NetworkX ↔ MariaDB, neighbor queries, shortest path, node merging (identity resolution), subgraph filtering
+- **`chroma_store.py`** — Two collections: `file_embeddings` (MiniLM 384-dim for text) and `image_embeddings` (CLIP 512-dim for images). Cross-modal semantic search. Graceful fallback if CLIP is unavailable
 
 #### `egida/` — HSD Guardrail
-- **`filters.py`** — 14 pattern regex: API key, JWT, password, GitHub token, AWS key, HuggingFace token, SSH key, CAP, telefono, CF, email, Discord/Slack token
-- **`ner_light.py`** — NER con SpaCy `it_core_news_sm` (PERSON, GPE, LOC, ORG, ADDRESS). Degrado graceful se SpaCy non installato
-- **`quarantine.py`** — Isolamento file infetti in directory datate con report JSON dei match
+- **`filters.py`** — 14 regex patterns: API key, JWT, password, GitHub token, AWS key, HuggingFace token, SSH key, postal code, phone, tax ID, email, Discord/Slack token
+- **`ner_light.py`** — NER with SpaCy `it_core_news_sm` (PERSON, GPE, LOC, ORG, ADDRESS). Graceful degradation if SpaCy is not installed
+- **`quarantine.py`** — Isolation of infected files in dated directories with JSON match reports
 
-#### `ingestion/` — Pipeline di ingestion
-- **`scanner.py`** — Scansione one-shot ricorsiva con dedup SHA-256, skip pattern, callback on_file_processed. **Watchdog reale** con `WatchdogManager` (observer thread-safe, debounce 2s, FileCreationHandler)
-- **`metadata.py`** — Estrazione metadati base: hash SHA-256, MIME type (80+ tipi mappati), size, date. Magic bytes fallback per estensione sconosciuta
-- **`processor.py`** — **8 stage di elaborazione**:
-  1. EXIF (Pillow → GPS, data scatto, camera make/model)
-  2. Embedding testo (MiniLM → ChromaDB)
-  3. Embedding immagini (CLIP ViT-B/32, 512-dim → ChromaDB)
-  4. NER (SpaCy → crea nodi Person/Location + edge MENTIONS)
-  5. Face detection (YOLOv8n → bounding box, conteggio volti)
-  6. Event nodes da data (filename/EXIF/filesystem → nodi Event + edge CREATED_AT)
-  7. Geocoding (coordinate GPS → Nominatim → nodi Location + edge LOCATED_AT, con cache JSON)
-  8. Scene detection video (PySceneDetect AdaptiveDetector → keyframe JPEG + nodi Event + edge HAS_SCENE)
-- **`image_embedder.py`** — CLIP embedding reale con open-clip-torch (ViT-B/32, 512-dim). Supporta `get_image_embedding()` e `get_text_embedding()` per ricerca cross-modale
-- **`dispatcher.py`** — Coda lazy con loop continuo, batch processing, reset stale items (crash recovery). **8 stage attivi** configurabili singolarmente
+#### `ingestion/` — Ingestion Pipeline
+- **`scanner.py`** — Recursive one-shot scan with SHA-256 dedup, skip patterns, on_file_processed callback. **Real watchdog** with `WatchdogManager` (thread-safe observer, 2s debounce, FileCreationHandler)
+- **`metadata.py`** — Basic metadata extraction: SHA-256 hash, MIME type (80+ mapped types), size, date. Magic bytes fallback for unknown extensions
+- **`processor.py`** — **8 processing stages**:
+  1. EXIF (Pillow → GPS, date taken, camera make/model)
+  2. Text embedding (MiniLM → ChromaDB)
+  3. Image embedding (CLIP ViT-B/32, 512-dim → ChromaDB)
+  4. NER (SpaCy → creates Person/Location nodes + MENTIONS edges)
+  5. Face detection (YOLOv8n → bounding boxes, face count)
+  6. Event nodes from dates (filename/EXIF/filesystem → Event nodes + CREATED_AT edges)
+  7. Geocoding (GPS coordinates → Nominatim → Location nodes + LOCATED_AT edges, with JSON cache)
+  8. Video scene detection (PySceneDetect AdaptiveDetector → keyframe JPEG + Event nodes + HAS_SCENE edges)
+- **`image_embedder.py`** — Real CLIP embedding with open-clip-torch (ViT-B/32, 512-dim). Supports `get_image_embedding()` and `get_text_embedding()` for cross-modal search
+- **`dispatcher.py`** — Lazy queue with continuous loop, batch processing, stale item reset (crash recovery). **8 active stages**, individually configurable
 
 #### `recognition/` — Face recognition
-- **`deepface_engine.py`** — InsightFace con modello `buffalo_l` (RetinaFace detection + ArcFace 512-dim recognition). Funziona interamente su CPU. Supporta: detect, embedding, cosine similarity, clustering DBSCAN, merging, batch processing, salvataggio embedding su file .npy
+- **`deepface_engine.py`** — InsightFace with `buffalo_l` model (RetinaFace detection + ArcFace 512-dim recognition). Runs entirely on CPU. Supports: detect, embedding, cosine similarity, DBSCAN clustering, merging, batch processing, embedding saving to .npy files
 
 #### `web/api.py` — REST API (Flask)
-Espone il grafo via endpoint HTTP:
-- `GET /api/stats` — Statistiche aggregate (nodi per tipo, archi, volti, Chroma count)
-- `GET /api/nodes` — Lista nodi con paginazione, filtro per tipo, ricerca testuale
-- `GET /api/nodes/<id>` — Dettaglio nodo con archi entranti/uscenti, embedding, foto associata
-- `GET /api/graph` — Grafo completo per visualizzazione (campionamento intelligente, colori per tipo)
-- `GET /api/search` — Ricerca semantica via ChromaDB (testuale → risultati cross-modali con similarità)
-- `GET /api/faces` — Lista nodi Person con bounding box, embedding, sorgente
-- `GET /api/projects` — Progetti con conteggio file
-- `GET /api/locations` — Location con conteggio mentions
-- `GET /api/embeddings/status` — Statistiche embedding .npy salvati
-- `GET /api/images/<node_id>` — Servi file immagine dal file_registry
-- `GET /api/events` — Eventi con data, conteggio file, ordinati cronologicamente
-- `GET /api/events/<id>` — Dettaglio evento con file collegati e scene
-- `GET /api/events/timeline` — Timeline eventi raggruppata per anno/mese
-- `GET /api/events/calendar` — Dati per calendario (heatmap stile GitHub)
+Exposes the graph via HTTP endpoints:
+- `GET /api/stats` — Aggregate stats (nodes by type, edges, faces, Chroma count)
+- `GET /api/nodes` — Node list with pagination, type filter, text search
+- `GET /api/nodes/<id>` — Node detail with incoming/outgoing edges, embedding, associated photo
+- `GET /api/graph` — Full graph for visualization (intelligent sampling, colors by type)
+- `GET /api/search` — Semantic search via ChromaDB (text → cross-modal results with similarity)
+- `GET /api/faces` — Person node list with bounding boxes, embedding, source
+- `GET /api/projects` — Projects with file count
+- `GET /api/locations` — Locations with mention count
+- `GET /api/embeddings/status` — Saved .npy embedding stats
+- `GET /api/images/<node_id>` — Serve image file from file_registry
+- `GET /api/events` — Events with date, file count, chronologically sorted
+- `GET /api/events/<id>` — Event detail with linked files and scenes
+- `GET /api/events/timeline` — Event timeline grouped by year/month
+- `GET /api/events/calendar` — Calendar data (GitHub-style heatmap)
 
 #### CLI (`cli.py`)
-16 comandi implementati:
+16 implemented commands:
 
-| Comando | Funzione |
+| Command | Function |
 |---|---|
-| `scan` | Scansione singola directory |
-| `scan:all` | Scansione tutti storage configurati |
-| `watchdog start/status` | Watchdog filesystem in tempo reale |
-| `queue process/loop/status/reset-stale` | Gestione coda di elaborazione |
-| `search` | Ricerca semantica nel grafo |
-| `graph status` | Statistiche del grafo |
-| `configure set/test/clear` | Gestione password via keyring |
-| `db dedup/stats` | Operazioni sul database |
-| `geo process/test/cache` | Geocoding GPS (Nominatim) |
-| `event create-from-dates/status/list` | Gestione nodi Event |
-| `video detect-scenes/list/status` | Scene detection per video |
-| `quarantine list/clear` | Gestione quarantena HSD |
+| `scan` | Single directory scan |
+| `scan:all` | Scan all configured storage |
+| `watchdog start/status` | Real-time filesystem watchdog |
+| `queue process/loop/status/reset-stale` | Processing queue management |
+| `search` | Semantic graph search |
+| `graph status` | Graph statistics |
+| `configure set/test/clear` | Password management via keyring |
+| `db dedup/stats` | Database operations |
+| `geo process/test/cache` | GPS geocoding (Nominatim) |
+| `event create-from-dates/status/list` | Event node management |
+| `video detect-scenes/list/status` | Video scene detection |
+| `quarantine list/clear` | HSD quarantine management |
 | `face test/process-all/reprocess/status/cluster/cluster-dbscan/embedding-status` | Face recognition |
 
-#### Scripts batch
-- `scripts/batch_face_detection.py` — Face detection su larga scala
-- `scripts/batch_image_embedding.py` — Embedding batch per immagini
-- `scripts/check_paths.py` — Verifica esistenza path configurati
-- `scripts/explore_data.py` — Esplorazione dataset
-- `scripts/find_parents_photos.py` — Trova foto genitori (versione standalone)
+#### Batch Scripts
+- `scripts/batch_face_detection.py` — Large-scale face detection
+- `scripts/batch_image_embedding.py` — Batch embedding for images
+- `scripts/check_paths.py` — Verify configured path existence
+- `scripts/explore_data.py` — Dataset exploration
+- `scripts/find_parents_photos.py` — Find parent photos (standalone version)
 
-#### Configurazione
-- `settings.py` — Config via `.env` + keyring di sistema (Windows Credential Manager, macOS Keychain, Linux Secret Service)
-- Password mai in chiaro: keyring → env var → `.env` (con warning)
+#### Configuration
+- `settings.py` — Config via `.env` + system keyring (Windows Credential Manager, macOS Keychain, Linux Secret Service)
+- Password never in plaintext: keyring → env var → `.env` (with warning)
 - Storage paths, Chroma path, quarantine path, SpaCy model, InsightFace settings, log level, batch size
 
 ---
 
-## 2. Archimede — Lettura Passiva
+## 2. Archimede — Passive Reading
 
-Riadattamento per la lettura e navigazione **read-only** del grafo Penelope.
+Adaptation for **read-only** reading and navigation of the Penelope graph.
 
-### Principi
-- **Non scrive mai** sul grafo — solo query SELECT su MariaDB e letture ChromaDB
-- **Non esegue, non modifica, non elimina** nulla
-- Identity resolution su foto tramite InsightFace ArcFace 512-dim
-- Re-encoding delle credenziali: eredita la configurazione (`.env` e keyring) da Penelope
+### Principles
+- **Never writes** to the graph — only SELECT queries on MariaDB and ChromaDB reads
+- **Does not execute, modify, or delete** anything
+- Identity resolution on photos via InsightFace ArcFace 512-dim
+- Credential re-encoding: inherits configuration (`.env` and keyring) from Penelope
 
-### Moduli implementati
+### Implemented Modules
 
-#### `query.py` — CLI di ricerca
-Entry point principale. Comandi:
-- `find-parents` — Cerca foto di coppia dei genitori. Modalità:
-  - `--ref-dir <path>`: cartella con sottocartelle `papa/`, `mamma/` con foto di referenza
-  - `--interactive`: clustering interattivo dei volti con identificazione guidata
-- `stats` — Statistiche lettura del grafo
+#### `query.py` — Search CLI
+Main entry point. Commands:
+- `find-parents` — Search for parent couple photos. Modes:
+  - `--ref-dir <path>`: folder with subfolders `dad/`, `mom/` with reference photos
+  - `--interactive`: interactive face clustering with guided identification
+- `stats` — Graph reading statistics
 
 #### `graph/reader.py` — PenelopeGraphReader
-Wrapper **read-only** attorno a `MariaDBStore` di Penelope. Caratteristiche:
-- Solo query SELECT (blocco automatico via `stripped.upper().startswith("SELECT")`)
-- Eredita automaticamente credenziali da Penelope (keyring + `.env`)
-- Cerca automaticamente la directory Penelope
-- Metodi: `count_photos()`, `get_all_photos()`, `get_photos_in_directory()`, `get_photos_with_face_count()`, `get_person_nodes()`, `get_edges_for_photo()`, `get_persons_in_photo()`
+**Read-only** wrapper around Penelope's `MariaDBStore`. Features:
+- Only SELECT queries (auto-block via `stripped.upper().startswith("SELECT")`)
+- Automatically inherits credentials from Penelope (keyring + `.env`)
+- Automatically searches for the Penelope directory
+- Methods: `count_photos()`, `get_all_photos()`, `get_photos_in_directory()`, `get_photos_with_face_count()`, `get_person_nodes()`, `get_edges_for_photo()`, `get_persons_in_photo()`
 
 #### `graph/chroma_reader.py` — PenelopeChromaReader
-Reader **read-only** della ChromaDB di Penelope. Metodi:
+**Read-only** reader of Penelope's ChromaDB. Methods:
 - `get_collections()`, `query_images()`, `count_images()`
 
-#### `identity/face_engine.py` — Motore InsightFace
-- Caricamento lazy del modello `buffalo_l` (ArcFace 512-dim)
-- Funzioni: `detect_faces()`, `cosine_similarity()`, `verify()`
-- Embedding 512-dim normalizzati L2
+#### `identity/face_engine.py` — InsightFace Engine
+- Lazy loading of `buffalo_l` model (ArcFace 512-dim)
+- Functions: `detect_faces()`, `cosine_similarity()`, `verify()`
+- 512-dim L2-normalized embeddings
 
 #### `identity/matcher.py` — Face matching
-Pipeline completa:
-1. Carica foto referenza da directory strutturate (`papa/`, `mamma/`)
-2. Calcola embedding medio per ogni persona
-3. Per ogni foto nel database: rileva volti, confronta embedding con referenze
-4. Trova foto dove ENTRAMBI i genitori appaiono insieme
-- Soglia similarità configurabile (default 0.35)
-- Supporto batch con callback di progresso
+Complete pipeline:
+1. Load reference photos from structured directories (`dad/`, `mom/`)
+2. Compute average embedding for each person
+3. For each photo in the database: detect faces, compare embeddings with references
+4. Find photos where BOTH parents appear together
+- Configurable similarity threshold (default 0.35)
+- Batch support with progress callback
 
-#### `presentation/report.py` — Report HTML
-Genera report HTML navigabile con:
-- Statistiche (foto scansionate, con volti, di coppia, durata)
-- Galleria foto di coppia con badge
-- Gallerie per singolo genitore
-- Lightbox per ingrandimento
-- Tags colorati per persona
-- Thumbnail in data URI (CV2 + JPEG compression)
+#### `presentation/report.py` — HTML Report
+Generates navigable HTML report with:
+- Statistics (scanned photos, with faces, couple photos, duration)
+- Couple photo gallery with badges
+- Individual parent galleries
+- Lightbox for enlargement
+- Colored tags per person
+- Thumbnails in data URI (CV2 + JPEG compression)
 
-#### `models.py` — Modelli dati Oracle
+#### `models.py` — Oracle data models
 `Photo`, `DetectedFace`, `ReferenceFace`, `FaceMatch`, `PhotoMatchResult`, `SearchReport`
 
 ---
 
-## 3. Oracle — Agente Esecutivo e Interfaccia Applicativa
+## 3. Oracle — Executive Agent and Application Interface
 
-Agente di coding autonomo basato su framework Agno. In Oracle è **agente esecutivo** e **interfaccia applicativa principale**: crea codice, accede a internet, fa ricerche web, e comunica direttamente con l'utente tramite frontend web e API chat. Usa i dati di Penelope come contesto/memoria ma **non ha accesso di scrittura** ai dati sensibili del grafo.
+Autonomous coding agent based on the Agno framework. In Oracle, it is the **executive agent** and **main application interface**: creates code, accesses the internet, performs web searches, and communicates directly with the user via web frontend and chat API. Uses Penelope data as context/memory but **does not have write access** to sensitive graph data.
 
-### Architettura
+### Architecture
 
 ```
 Oracle/
-├── coding_agent.py         # Agente + server FastAPI
-├── cli.py                  # CLI interattiva
-├── model_factory.py        # Registry provider LLM (50+ provider supportati)
-├── system_prompt*.md       # 3 varianti: full, lite, standard
-├── CONSTITUTION.md         # Legge fondamentale immutabile (7 articoli)
+├── coding_agent.py         # Agent + FastAPI server
+├── cli.py                  # Interactive CLI
+├── model_factory.py        # LLM provider registry (50+ providers supported)
+├── system_prompt*.md       # 3 variants: full, lite, standard
+├── CONSTITUTION.md         # Immutable fundamental law (7 articles)
 ├── api/
 │   ├── auth.py             # JWT authentication
-│   ├── rate_limit.py       # Rate limiting (in-memory o Redis)
+│   ├── rate_limit.py       # Rate limiting (in-memory or Redis)
 │   └── security.py         # CORS, HSTS, CSP, X-Frame-Options
-├── tools/                  # Tool a disposizione dell'agente
-│   ├── oracle_protocol.py  # Orchestratore MCTS + Sandbox + Context Filter
-│   ├── mcts_engine.py      # Albero decisionale multi-ramo
-│   ├── interleaved_sandbox.py # Esecuzione Python/Bash/SQL sicura
-│   ├── semantic_context_filter.py # Anti-drift per sessioni lunghe
-│   ├── vector_memory.py    # Memoria vettoriale ChromaDB (multimodale CLIP)
-│   ├── multimodal_encoder.py # CLIP encoder per immagini
-│   ├── web_access.py       # HTTP GET/POST/DOWNLOAD con SSRF protection
+├── tools/                  # Tools available to the agent
+│   ├── oracle_protocol.py  # MCTS Orchestrator + Sandbox + Context Filter
+│   ├── mcts_engine.py      # Multi-branch decision tree
+│   ├── interleaved_sandbox.py # Safe Python/Bash/SQL execution
+│   ├── semantic_context_filter.py # Anti-drift for long sessions
+│   ├── vector_memory.py    # Vector memory ChromaDB (multimodal CLIP)
+│   ├── multimodal_encoder.py # CLIP encoder for images
+│   ├── web_access.py       # HTTP GET/POST/DOWNLOAD with SSRF protection
 │   ├── wiki_tool.py        # Wikipedia API wrapper
-│   ├── gmail_client.py     # Gmail API (lettura/invio email)
-│   ├── immunity_guardian.py # Verifica costituzionale delle azioni
-│   ├── environment_probe.py # Feasibility pre-flight (porte, dipendenze, FS)
-│   ├── constitution.py     # Costituzione in formato tool
-│   ├── chunk_filter.py     # Filtro chunk per contesto
-│   ├── tool_catalog.md     # Catalogo dinamico dei tool
-│   └── TOOL_REGISTRY.md    # Registro dei tool disponibili
+│   ├── gmail_client.py     # Gmail API (read/send emails)
+│   ├── immunity_guardian.py # Constitutional action verification
+│   ├── environment_probe.py # Feasibility pre-flight (ports, dependencies, FS)
+│   ├── constitution.py     # Constitution as tool
+│   ├── chunk_filter.py     # Context chunk filter
+│   ├── tool_catalog.md     # Dynamic tool catalog
+│   └── TOOL_REGISTRY.md    # Available tools registry
 └── workspace/
-    ├── tool_lifecycle.py   # Ciclo di vita dei tool
-    ├── tool_repository.py  # Repository dei tool
-    ├── rui/                # Framework di intelligence OSINT
-    │   ├── collection/     # Raccolta: web scraper, domain recon, social search
-    │   ├── analysis/       # Analisi: cross-reference, timeline, geo OSINT
-    │   ├── verification/   # Verifica: fact checker, confidence scorer
+    ├── tool_lifecycle.py   # Tool lifecycle
+    ├── tool_repository.py  # Tool repository
+    ├── rui/                # OSINT intelligence framework
+    │   ├── collection/     # Collection: web scraper, domain recon, social search
+    │   ├── analysis/       # Analysis: cross-reference, timeline, geo OSINT
+    │   ├── verification/   # Verification: fact checker, confidence scorer
     │   ├── core/           # Case manager, intelligence cycle, source matrix
     │   ├── reporting/      # Report generator, sanitizer
     │   ├── cybersecurity/  # Attack surface, breach checker, threat intel
     │   ├── research/       # Academic search, legal reference
     │   └── math_science/   # Math solver, physics tools, CS analyzer
-    └── *.md                # Documentazione obiettivi e capacità
+    └── *.md                # Objectives and capabilities documentation
 ```
 
 ### Frontend
-Oracle espone l'interfaccia utente con design Matrix Rain:
-- **http://localhost:8100/** — Interfaccia principale
-- **POST /api/chat** — Chat non-streaming
-- **GET /api/chat/stream** — Chat con SSE streaming
+Oracle exposes the user interface with Matrix Rain design:
+- **http://localhost:8100/** — Main interface
+- **POST /api/chat** — Non-streaming chat
+- **GET /api/chat/stream** — Chat with SSE streaming
 - **GET /api/health** — Health check
-- **GET /api/model** — Info modello attivo
-- **GET /ui** — Serve il frontend HTML
+- **GET /api/model** — Active model info
+- **GET /ui** — Serves the HTML frontend
 
-### CONSTITUTION.md — Legge fondamentale
-7 articoli immutabili che vincolano l'agente:
-1. **Perimetro operativo**: solo directory autorizzata
-2. **Accesso web**: solo domini whitelistati
-3. **Danno e privacy**: nessuna azione dannosa
-4. **Nuovi tool**: devono essere approvati dall'utente prima di essere attivi
-5. **Azioni irreversibili**: richiedono conferma esplicita
-6. **Perceived limit**: se un task supera un confine etico/di sicurezza → stop immediato
-7. **Immutabilità**: la costituzione non può essere modificata
+### CONSTITUTION.md — Fundamental Law
+7 immutable articles that bind the agent:
+1. **Operational perimeter**: only authorized directory
+2. **Web access**: only whitelisted domains
+3. **Harm and privacy**: no harmful actions
+4. **New tools**: must be approved by the user before becoming active
+5. **Irreversible actions**: require explicit confirmation
+6. **Perceived limit**: if a task crosses an ethical/security boundary → immediate stop
+7. **Immutability**: the constitution cannot be modified
 
 ---
 
-## 4. Egida — Guardrail HSD (4° strato indipendente)
+## 4. Egida — HSD Guardrail (4th independent layer)
 
-**Egida è il 4° strato di Oracle**, un guardrail HSD (Highly Sensitive Data) auto-contenuto e indipendente. Agisce **a monte di TUTTI gli strati**: Penelope, Archimede e Oracle.
+**Egida is Oracle's 4th layer**, a self-contained and independent HSD (Highly Sensitive Data) guardrail. It acts **upstream of ALL layers**: Penelope, Archimede, and Oracle.
 
-### Architettura
+### Architecture
 
 ```
 Oracle/egida/
-├── __init__.py        # Esporta API pubblica (HSDFilter, Quarantine, scan_text, scan_file)
-├── config.py          # Configurazione indipendente via env var (EGIDA_THRESHOLD, EGIDA_SPACY_MODEL, ...)
-├── filters.py         # 14 pattern regex + validazioni post-match + scoring/severity v2.0
-├── ner_light.py       # NER SpaCy (PERSON, GPE, LOC, ORG, ADDRESS) con degrado graceful
-├── quarantine.py      # Isolamento file in directory datata + report JSON
-├── pyproject.toml     # Installabile via pip install -e .
+├── __init__.py        # Exports public API (HSDFilter, Quarantine, scan_text, scan_file)
+├── config.py          # Independent config via env vars (EGIDA_THRESHOLD, EGIDA_SPACY_MODEL, ...)
+├── filters.py         # 14 regex patterns + post-match validation + scoring/severity v2.0
+├── ner_light.py       # NER SpaCy (PERSON, GPE, LOC, ORG, ADDRESS) with graceful degradation
+├── quarantine.py      # File isolation in dated directory + JSON report
+├── pyproject.toml     # Installable via pip install -e .
 └── tests/
-    └── test_filters.py # 45 test (veri positivi, falsi positivi, scoring, binary detection)
+    └── test_filters.py # 45 tests (true positives, false positives, scoring, binary detection)
 ```
 
-### Funzionamento
-Ogni file viene analizzato PRIMA di entrare in qualsiasi strato. Se contiene HSD con score >= soglia (default 90), viene copiato in quarantena con report JSON e NON passa.
+### Operation
+Each file is analyzed BEFORE entering any layer. If it contains HSD with score >= threshold (default 90), it is copied to quarantine with JSON report and does NOT pass through.
 
-### Sistema di Scoring v2.0
+### Scoring System v2.0
 
-| Severity | Peso | Esempi |
-|----------|------|--------|
+| Severity | Weight | Examples |
+|----------|--------|----------|
 | **CRITICAL** | 100 | AWS Key, GitHub Token, SSH Key, HuggingFace Token |
-| **HIGH** | 90 | Codice Fiscale, API Key vera, JWT valido
-| **MEDIUM** | 50 | Telefono, Email (cumulativo) |
-| **LOW** | 25 | CAP, placeholder password |
-| **INFO** | 10 | Email fittizia di test |
+| **HIGH** | 90 | Tax ID, Real API Key, Valid JWT |
+| **MEDIUM** | 50 | Phone, Email (cumulative) |
+| **LOW** | 25 | Postal code, placeholder password |
+| **INFO** | 10 | Test dummy email |
 
-### Pattern rilevati (14)
-**CRITICAL:** AWS Access Key, Token GitHub (ghp_/gho_/ghu_), Token HuggingFace, Chiave SSH privata
-**HIGH:** Codice Fiscale italiano, API Key / Secret generico, Token JWT / Bearer, Password esplicita, Token Discord/Slack
-**MEDIUM:** Numero di telefono, Indirizzo email
-**LOW:** CAP
+### Detected Patterns (14)
+**CRITICAL:** AWS Access Key, GitHub Token (ghp_/gho_/ghu_), HuggingFace Token, Private SSH Key
+**HIGH:** Italian Tax ID, Generic API Key / Secret, JWT / Bearer Token, Explicit Password, Discord/Slack Token
+**MEDIUM:** Phone number, Email address
+**LOW:** Postal code
 
-**NER linguistico (SpaCy):** Persone, Luoghi, Organizzazioni, Indirizzi
+**Linguistic NER (SpaCy):** Persons, Places, Organizations, Addresses
 
-### Protezione anti-falso positivo
-- UUID non scambiati per telefono
-- Timestamp non scambiati per CAP
-- Placeholder password (type hint, CI defaults) declassati a LOW
-- Email fittizie (example.com, test.com) declassate a INFO
-- URL non scambiati per JWT
-- Magic byte detection per file binari
+### False Positive Protection
+- UUID not mistaken for phone
+- Timestamps not mistaken for postal codes
+- Placeholder passwords (type hints, CI defaults) downgraded to LOW
+- Dummy emails (example.com, test.com) downgraded to INFO
+- URLs not mistaken for JWT
+- Magic byte detection for binary files
 
-### Differenze dalla versione precedente (modulo di Penelope)
+### Differences from Previous Version (Penelope module)
 
-| Aspetto | Prima (modulo Penelope) | Ora (4° strato) |
+| Aspect | Before (Penelope module) | Now (4th layer) |
 |---------|------------------------|-----------------|
-| **Posizione** | `Oracle/Penelope/penelope/egida/` | `Oracle/egida/` |
-| **Config** | Leggeva `penelope.config.settings` (prefisso PENELOPE_) | `egida/config.py` indipendente (prefisso EGIDA_) |
-| **Copertura** | Solo Penelope | Penelope + Archimede + Oracle |
+| **Location** | `Oracle/Penelope/penelope/egida/` | `Oracle/egida/` |
+| **Config** | Read `penelope.config.settings` (PENELOPE_ prefix) | `egida/config.py` independent (EGIDA_ prefix) |
+| **Coverage** | Penelope only | Penelope + Archimede + Oracle |
 | **Import** | `from penelope.egida import ...` | `from egida import ...` |
-| **Installazione** | Inclusa in Penelope | `pip install -e Oracle/egida` |
-| **Test** | Insieme ai test di Penelope | Indipendenti (45 test) |
+| **Installation** | Included in Penelope | `pip install -e Oracle/egida` |
+| **Tests** | Together with Penelope tests | Independent (45 tests) |
 
-### Quarantena
-- Copia del file in directory `quarantine/YYYYMMDD_HHMMSS/`
-- Report JSON con: path originale, timestamp, match_count, score, soglia, match dettagliati
-- Comandi CLI: `quarantine list`, `quarantine clear`
-- Stato attuale: **130+ entry in quarantena**
+### Quarantine
+- File copy to `quarantine/YYYYMMDD_HHMMSS/` directory
+- JSON report with: original path, timestamp, match_count, score, threshold, detailed matches
+- CLI commands: `quarantine list`, `quarantine clear`
+- Current status: **130+ quarantine entries**
 
-### Uso da altri strati
+### Usage from Other Layers
 
 ```python
-# Penelope (gia' configurato)
+# Penelope (already configured)
 from egida.filters import HSDFilter
 from egida.quarantine import Quarantine
 
-# Archimede (aggiungere Oracle/ al path)
+# Archimede (add Oracle/ to path)
 import sys; sys.path.insert(0, 'path/to/Oracle')
 from egida.filters import HSDFilter
 
-# Oracle (aggiungere Oracle/ al path)
+# Oracle (add Oracle/ to path)
 from egida.filters import HSDFilter
 ```
 
 ---
 
-## 5. Stato attuale del grafo (Penelope)
+## 5. Current Graph Status (Penelope)
 
-Dati reali dal MariaDB (accesso al 15 Luglio 2026):
+Real data from MariaDB (accessed July 15, 2026):
 
-| Metrica | Valore |
+| Metric | Value |
 |---|---|
-| **Nodi totali** | **8.908** |
-| └ File | 4.127 |
-| └ Location | 2.675 |
-| └ Person | 2.102 |
+| **Total nodes** | **8,908** |
+| └ File | 4,127 |
+| └ Location | 2,675 |
+| └ Person | 2,102 |
 | └ Project | 4 |
-| └ Event | **Generati attivamente** da date e scene detection |
-| **Archi totali** | **10.344** |
-| └ MEMBER_OF (File → Project) | 4.127 |
-| └ MENTIONS (File → Person/Location) | 4.115 |
-| └ CONTAINS (File → Person) | 2.102 |
-| └ CREATED_AT (File → Event) | ✨ Generati da process_date_event |
-| └ LOCATED_AT (File → Location) | ✨ Generati da process_geocoding |
-| └ HAS_SCENE (Video → Event) | ✨ Generati da process_scene_detection |
-| **File con volti rilevati** | **3.105** |
-| └ con InsightFace (ArcFace 512-dim) | 870 |
-| └ solo YOLO (detection base) | 2.235 |
-| **Nodi Person con embedding** | 209 su 2.102 |
-| **ChromaDB — documenti testo** | 264 |
-| **ChromaDB — immagini (CLIP)** | Dipende dal batch processing |
-| **Coda ingestion** | 3.991 fatti, ~136 in elaborazione |
-| **Entry in quarantena HSD** | 130+ |
+| └ Event | **Actively generated** from dates and scene detection |
+| **Total edges** | **10,344** |
+| └ MEMBER_OF (File → Project) | 4,127 |
+| └ MENTIONS (File → Person/Location) | 4,115 |
+| └ CONTAINS (File → Person) | 2,102 |
+| └ CREATED_AT (File → Event) | ✨ Generated by process_date_event |
+| └ LOCATED_AT (File → Location) | ✨ Generated by process_geocoding |
+| └ HAS_SCENE (Video → Event) | ✨ Generated by process_scene_detection |
+| **Files with detected faces** | **3,105** |
+| └ with InsightFace (ArcFace 512-dim) | 870 |
+| └ YOLO only (base detection) | 2,235 |
+| **Person nodes with embedding** | 209 out of 2,102 |
+| **ChromaDB — text documents** | 264 |
+| **ChromaDB — images (CLIP)** | Depends on batch processing |
+| **Ingestion queue** | 3,991 done, ~136 processing |
+| **HSD quarantine entries** | 130+ |
 
 ---
 
@@ -356,36 +356,36 @@ Dati reali dal MariaDB (accesso al 15 Luglio 2026):
 
 ### Penelope
 
-| Test | Stato |
+| Test | Status |
 |---|---|
-| `tests/test_filters.py` — Filtri HSD | ✅ |
+| `tests/test_filters.py` — HSD Filters | ✅ |
 | `tests/test_graph_bridge.py` — NetworkX bridge | ✅ |
-| `tests/test_metadata.py` — Estrazione metadati | ✅ |
-| `tests/test_scanner.py` — Scanner filesystem | ✅ |
-| `tests/test_chroma.py` — ChromaDB | ✅ (8 test: index, search, count, upsert, immagini, persistenza) |
-| `tests/test_dispatcher.py` — Coda elaborazione | ✅ (6 test: init, process, batch, loop, stale reset, stop) |
-| `tests/test_processor.py` — Stage elaborazione | ✅ (11 test: EXIF, embedding, NER, face detection, scene detection) |
-| `tests/test_deepface.py` — InsightFace | ✅ (8 test: detection, cosine similarity, verify, save/load embedding, process) |
-| `tests/test_e2e_integration.py` — Test E2E | ✅ (13 test: scan→queue, dedup, dispatcher, graph bridge, chroma, egida, processor) |
+| `tests/test_metadata.py` — Metadata extraction | ✅ |
+| `tests/test_scanner.py` — Filesystem scanner | ✅ |
+| `tests/test_chroma.py` — ChromaDB | ✅ (8 tests: index, search, count, upsert, images, persistence) |
+| `tests/test_dispatcher.py` — Processing queue | ✅ (6 tests: init, process, batch, loop, stale reset, stop) |
+| `tests/test_processor.py` — Processing stages | ✅ (11 tests: EXIF, embedding, NER, face detection, scene detection) |
+| `tests/test_deepface.py` — InsightFace | ✅ (8 tests: detection, cosine similarity, verify, save/load embedding, process) |
+| `tests/test_e2e_integration.py` — E2E Tests | ✅ (13 tests: scan→queue, dedup, dispatcher, graph bridge, chroma, egida, processor) |
 
 ### Archimede
 
-| Test | Stato |
+| Test | Status |
 |---|---|
-| `tests/test_graph_reader.py` — Reader grafo | ✅ (13 test: connessione, SELECT-only, query, photos, persons, edges) |
-| `tests/test_chroma_reader.py` — Reader ChromaDB | ✅ (10 test: init, collections, query, count, close) |
-| `tests/test_face_engine.py` — Motore InsightFace | ✅ (9 test: analyzer, detection, cosine similarity, verify) |
-| `tests/test_matcher.py` — Face matching | ✅ (10 test: load references, match photo, couple search, callback) |
-| `tests/test_report.py` — Report HTML | ✅ (9 test: generation, content, empty/single parent, properties) |
-| `tests/test_query.py` — CLI query | ✅ (5 test: stats, find-parents, error handling) |
+| `tests/test_graph_reader.py` — Graph reader | ✅ (13 tests: connection, SELECT-only, query, photos, persons, edges) |
+| `tests/test_chroma_reader.py` — ChromaDB reader | ✅ (10 tests: init, collections, query, count, close) |
+| `tests/test_face_engine.py` — InsightFace engine | ✅ (9 tests: analyzer, detection, cosine similarity, verify) |
+| `tests/test_matcher.py` — Face matching | ✅ (10 tests: load references, match photo, couple search, callback) |
+| `tests/test_report.py` — HTML report | ✅ (9 tests: generation, content, empty/single parent, properties) |
+| `tests/test_query.py` — CLI query | ✅ (5 tests: stats, find-parents, error handling) |
 
-### Egida (4° strato indipendente)
-| Test | Stato |
+### Egida (4th independent layer)
+| Test | Status |
 |---|---|
-| `tests/test_filters.py` — 45 test | ✅ (veri positivi, falsi positivi, scoring, binary) |
+| `tests/test_filters.py` — 45 tests | ✅ (true positives, false positives, scoring, binary) |
 
 ### Oracle
-| Test | Stato |
+| Test | Status |
 |---|---|
 | `tests/test_api_auth.py` | ✅ |
 | `tests/test_config.py` | ✅ |
@@ -393,60 +393,60 @@ Dati reali dal MariaDB (accesso al 15 Luglio 2026):
 
 ---
 
-## 7. Placeholder e lavori in corso
+## 7. Placeholders and Work in Progress
 
-| Funzionalità | Stato | Dettaglio |
+| Functionality | Status | Detail |
 |---|---|---|
-| **Face clustering su larga scala** | 🟠 Parziale | DBSCAN implementato ma non eseguito su tutti i 2.102 nodi Person |
-| **Trascrizione audio (Whisper)** | 🔴 Non iniziato | Menzionato come Fase 2, nessun codice |
-| **Sync cross-device** | 🟡 Non iniziato | Rilevamento file spostati, conflitti, merge |
-| **Smartphone** | 🔵 Futuro | Architettura lo menziona, non iniziato |
+| **Large-scale face clustering** | 🟠 Partial | DBSCAN implemented but not run on all 2,102 Person nodes |
+| **Audio transcription (Whisper)** | 🔴 Not started | Mentioned as Phase 2, no code |
+| **Cross-device sync** | 🟡 Not started | Moved file detection, conflicts, merge |
+| **Smartphone** | 🔵 Future | Architecture mentions it, not started |
 
-### Legenda placeholder risolti
-- ~~Watchdog filesystem~~ → ✅ **Implementato reale** (`WatchdogManager` con debounce)
-- ~~Embedding immagini CLIP~~ → ✅ **Implementato reale** (open-clip-torch ViT-B/32)
-- ~~Scene detection video~~ → ✅ **Implementato reale** (PySceneDetect AdaptiveDetector)
-- ~~Nodi Event~~ → ✅ **Creati attivamente** da process_date_event e process_scene_detection
-- ~~Geocoding GPS~~ → ✅ **Implementato** con Nominatim e cache JSON
-- ~~Azure Face API~~ → ❌ **RIMOSSA** (non più necessaria, InsightFace locale sufficiente)
-
----
-
-## 8. Vincoli hardware attuali
-
-Nodi disponibili oggi:
-- **Laptop main**: i3, 8GB RAM, GPU integrata
-- **Laptop Linux headless**: solo storage, Celeron, 4GB RAM
-- **Hard disk esterno 1TB**: progetti in corso o pubblicati su GitHub
-- **Server Uninet (Proxmox)**: Celeron, 2GB RAM — ospita il MariaDB per Penelope
-- **Smartphone**: da integrare in futuro
-- **Mac M1 Pro 32GB**: in arrivo — riserverà calcolo pesante (embedding, NER, modelli locali)
+### Resolved Placeholder Legend
+- ~~Filesystem watchdog~~ → ✅ **Real implementation** (`WatchdogManager` with debounce)
+- ~~CLIP image embeddings~~ → ✅ **Real implementation** (open-clip-torch ViT-B/32)
+- ~~Video scene detection~~ → ✅ **Real implementation** (PySceneDetect AdaptiveDetector)
+- ~~Event nodes~~ → ✅ **Actively created** by process_date_event and process_scene_detection
+- ~~GPS geocoding~~ → ✅ **Implemented** with Nominatim and JSON cache
+- ~~Azure Face API~~ → ❌ **REMOVED** (no longer needed, local InsightFace sufficient)
 
 ---
 
-## 9. Comandi CLI
+## 8. Current Hardware Constraints
+
+Nodes available today:
+- **Main laptop**: i3, 8GB RAM, integrated GPU
+- **Headless Linux laptop**: storage only, Celeron, 4GB RAM
+- **1TB external hard disk**: ongoing or GitHub-published projects
+- **Uninet Server (Proxmox)**: Celeron, 2GB RAM — hosts Penelope's MariaDB
+- **Smartphone**: to be integrated in the future
+- **Mac M1 Pro 32GB**: incoming — will handle heavy computation (embedding, NER, local models)
+
+---
+
+## 9. CLI Commands
 
 ### Penelope
 
 ```powershell
-# Scansione
-python -m penelope.cli scan --device <nome> --project <nome> <path>
+# Scanning
+python -m penelope.cli scan --device <name> --project <name> <path>
 python -m penelope.cli scan:all
 
 # Watchdog
 python -m penelope.cli watchdog start [--path D:/dir]
 python -m penelope.cli watchdog status
 
-# Coda
+# Queue
 python -m penelope.cli queue process
 python -m penelope.cli queue loop
 python -m penelope.cli queue status
 python -m penelope.cli queue reset-stale
 
-# Ricerca semantica
+# Semantic search
 python -m penelope.cli search "query" --top 10
 
-# Grafo
+# Graph
 python -m penelope.cli graph status
 
 # Face
@@ -459,14 +459,14 @@ python -m penelope.cli face embedding-status
 python -m penelope.cli geo process
 python -m penelope.cli geo test
 
-# Eventi
+# Events
 python -m penelope.cli event create-from-dates
 python -m penelope.cli event status
 
 # Video
 python -m penelope.cli video detect-scenes
 
-# Quarantena
+# Quarantine
 python -m penelope.cli quarantine list
 python -m penelope.cli quarantine clear
 
@@ -486,26 +486,26 @@ python -m archimede.query find-parents --interactive
 python -m archimede.query stats
 ```
 
-### Oracle (orchestratore + frontend)
+### Oracle (orchestrator + frontend)
 
 ```powershell
-# Avvio unificato (Oracle su :8100)
+# Unified startup (Oracle on :8100)
 python run.py
 
-# Con porta personalizzata
+# Custom port
 python run.py --port 9000
 
-# Con Archimede API
+# With Archimede API
 python run.py --with-archimede
 
-# CLI interattiva
+# Interactive CLI
 cd Oracle/Oracle
 python cli.py
 ```
 
 ---
 
-## 10. Architettura completa (diagramma)
+## 10. Complete Architecture (diagram)
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -513,13 +513,13 @@ python cli.py
 ├────────────────────────────────────────────────────────────────────────────┤
 │                                                                            │
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │  EGIDA (4° strato — guardrail HSD indipendente e cross-layer)       │  │
+│  │  EGIDA (4th layer — independent, cross-layer HSD guardrail)          │  │
 │  │                                                                      │  │
 │  │  ╔═══════════════════════════════════════════════════════════════╗   │  │
-│  │  ║  filters.py: 14 pattern regex + scoring v2.0                 ║   │  │
+│  │  ║  filters.py: 14 regex patterns + scoring v2.0                ║   │  │
 │  │  ║  ner_light.py: NER SpaCy (PERSON, GPE, LOC, ORG, ADDRESS)   ║   │  │
-│  │  ║  quarantine.py: Isolamento + report JSON                     ║   │  │
-│  │  ║  config.py: env vars indipendenti (EGIDA_THRESHOLD, ecc.)    ║   │  │
+│  │  ║  quarantine.py: Isolation + JSON report                      ║   │  │
+│  │  ║  config.py: independent env vars (EGIDA_THRESHOLD, etc.)     ║   │  │
 │  │  ╚═══════════════════════════════════════════════════════════════╝   │  │
 │  │  API: check_file()  check_text()  scan_file()  isolate()            │  │
 │  └────────────────────────┬─────────────────────────────────────────────┘  │
@@ -528,9 +528,9 @@ python cli.py
 │           ▼               ▼               ▼                                │
 │  ┌──────────────────┐ ┌──────────┐ ┌──────────────────────────────────┐   │
 │  │    PENELOPE      │ │SAMARITAN │ │        ORACLE                    │   │
-│  │  Ingestione &    │ │ Lettura  │ │  Orchestratore + Agente          │   │
-│  │    Grafo         │ │ passiva  │ │  Esecutivo + Frontend            │   │
-│  │                  │ │read-only │ │  + Interfaccia Applicativa       │   │
+│  │  Ingestion &     │ │ Read-only│ │  Orchestrator + Agent            │   │
+│  │    Graph         │ │ Reading  │ │  Executive + Frontend            │   │
+│  │                  │ │          │ │  + Application Interface         │   │
 │  │ [Scanner]        │ │[Graph    │ │                                  │   │
 │  │ [Watchdog]       │ │ Reader]  │ │ [Matrix Rain UI]                 │   │
 │  │ [Dispatcher]     │ │[Chroma   │ │ [MCTS Engine]                    │   │

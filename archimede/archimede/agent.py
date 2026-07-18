@@ -1,20 +1,20 @@
 """
-🤖 Archimede Agent — Motore dati read-only per il grafo personale di Oracle.
+🤖 Archimede Agent — Read-only data engine for Oracle's personal graph.
 
-NON contiene un LLM. Tutta l'elaborazione in linguaggio naturale è demandata
-all'orchestratore Oracle. Archimede è un puro motore dati che espone
-strumenti strutturati per interrogare il grafo Penelope.
+Does NOT contain an LLM. All natural language processing is delegated
+to the Oracle orchestrator. Archimede is a pure data engine that exposes
+structured tools to query the Penelope graph.
 
-Strumenti a disposizione:
-  - search_persons: cerca persone nel grafo
-  - get_person_photos: trova foto di una persona
-  - get_graph_stats: statistiche del grafo
-  - semantic_search: ricerca semantica su ChromaDB
-  - search_events: cerca eventi nel grafo
-  - search_locations: cerca luoghi nel grafo
-  - search_nodes: cerca nodi per nome
+Available tools:
+  - search_persons: search for people in the graph
+  - get_person_photos: find photos of a person
+  - get_graph_stats: graph statistics
+  - semantic_search: semantic search on ChromaDB
+  - search_events: search for events in the graph
+  - search_locations: search for locations in the graph
+  - search_nodes: search nodes by name
 
-Uso:
+Usage:
     agent = ArchimedeAgent()
     result = agent.dispatch("search_persons", query="Angela")
     result = agent.search_persons(query="Angela")
@@ -32,7 +32,7 @@ logger = logging.getLogger("archimede.agent")
 
 
 class ToolResult:
-    """Risultato di un tool."""
+    """Result from a tool."""
     def __init__(self, success: bool, data: Any, error: Optional[str] = None):
         self.success = success
         self.data = data
@@ -40,29 +40,29 @@ class ToolResult:
 
     def to_text(self) -> str:
         if not self.success:
-            return f"ERRORE: {self.error}"
+            return f"ERROR: {self.error}"
         if isinstance(self.data, str):
             return self.data
         return json.dumps(self.data, indent=2, ensure_ascii=False, default=str)
 
 
 class ArchimedeAgent:
-    """Motore dati read-only per il grafo personale.
+    """Read-only data engine for the personal graph.
 
-    **Non contiene un LLM.** Le richieste in linguaggio naturale devono
-    essere processate dall'orchestratore Oracle, che usa questo
-    motore per eseguire operazioni strutturate sul grafo.
+    **Does NOT contain an LLM.** Natural language requests must be
+    processed by the Oracle orchestrator, which uses this
+    engine to execute structured operations on the graph.
 
-    I metodi pubblici (tool_*) sono chiamabili singolarmente, oppure
-    si usa dispatch(action, **params) per dispatch dinamico.
+    Public methods (tool_*) can be called individually, or
+    use dispatch(action, **params) for dynamic dispatch.
     """
 
     def __init__(self):
         self._reader = None
         self._chroma = None
-        logger.info("ArchimedeAgent: motore dati inizializzato (senza LLM)")
+        logger.info("ArchimedeAgent: data engine initialized (no LLM)")
 
-    # ── Lazy initialization dei reader ──────────────────────────
+    # ── Lazy initialization of readers ──────────────────────────
 
     def _ensure_reader(self):
         if self._reader is not None:
@@ -71,10 +71,10 @@ class ArchimedeAgent:
             from archimede.graph.reader import PenelopeGraphReader
             self._reader = PenelopeGraphReader()
             if self._reader.connected:
-                logger.info("ArchimedeAgent: connesso al grafo Penelope (MariaDB)")
+                logger.info("ArchimedeAgent: connected to Penelope graph (MariaDB)")
                 return self._reader
             else:
-                logger.warning("ArchimedeAgent: reader non connesso")
+                logger.warning("ArchimedeAgent: reader not connected")
                 self._reader = None
                 return None
         except Exception as e:
@@ -92,12 +92,12 @@ class ArchimedeAgent:
             logger.warning("ArchimedeAgent: chroma error: %s", e)
             return None
 
-    # ── Strumenti ───────────────────────────────────────────────
+    # ── Tools ───────────────────────────────────────────────────
 
     def tool_search_persons(self, query: str) -> ToolResult:
         reader = self._ensure_reader()
         if not reader:
-            return ToolResult(False, "", "Grafo non disponibile")
+            return ToolResult(False, "", "Graph not available")
         try:
             persons = reader.get_person_nodes()
             query_lower = query.lower()
@@ -115,7 +115,7 @@ class ArchimedeAgent:
     def tool_get_person_photos(self, person_name: str, limit: int = 20) -> ToolResult:
         reader = self._ensure_reader()
         if not reader:
-            return ToolResult(False, "", "Grafo non disponibile")
+            return ToolResult(False, "", "Graph not available")
         try:
             persons = reader.get_person_nodes()
             query_lower = person_name.lower()
@@ -128,7 +128,7 @@ class ArchimedeAgent:
                     "count": 0,
                     "person": person_name,
                     "photos": [],
-                    "message": f"Nessuna persona trovata con nome '{person_name}'",
+                    "message": f"No person found with name '{person_name}'",
                 })
 
             all_photos = reader.get_all_photos(limit=200)
@@ -160,7 +160,7 @@ class ArchimedeAgent:
     def tool_get_graph_stats(self) -> ToolResult:
         reader = self._ensure_reader()
         if not reader:
-            return ToolResult(False, "", "Grafo non disponibile")
+            return ToolResult(False, "", "Graph not available")
         try:
             total_photos = reader.count_photos()
             persons = reader.get_person_nodes()
@@ -185,7 +185,7 @@ class ArchimedeAgent:
     def tool_semantic_search(self, query: str, top_k: int = 10) -> ToolResult:
         chroma = self._ensure_chroma()
         if not chroma:
-            return ToolResult(False, "", "ChromaDB non disponibile")
+            return ToolResult(False, "", "ChromaDB not available")
         try:
             collections = chroma.get_collections()
             results = []
@@ -227,7 +227,7 @@ class ArchimedeAgent:
                             pass
             except ImportError:
                 return ToolResult(True, {
-                    "message": "Sentence-transformers non disponibile per ricerca semantica",
+                    "message": "Sentence-transformers not available for semantic search",
                     "results": [],
                 })
 
@@ -239,7 +239,7 @@ class ArchimedeAgent:
     def tool_search_events(self, limit: int = 20) -> ToolResult:
         reader = self._ensure_reader()
         if not reader:
-            return ToolResult(False, "", "Grafo non disponibile")
+            return ToolResult(False, "", "Graph not available")
         try:
             events = reader._query(
                 "SELECT id, label, metadata, created_at FROM nodes "
@@ -253,7 +253,7 @@ class ArchimedeAgent:
     def tool_search_locations(self, limit: int = 20) -> ToolResult:
         reader = self._ensure_reader()
         if not reader:
-            return ToolResult(False, "", "Grafo non disponibile")
+            return ToolResult(False, "", "Graph not available")
         try:
             locations = reader._query(
                 "SELECT id, label, metadata, created_at FROM nodes "
@@ -267,7 +267,7 @@ class ArchimedeAgent:
     def tool_search_nodes(self, query: str, limit: int = 20) -> ToolResult:
         reader = self._ensure_reader()
         if not reader:
-            return ToolResult(False, "", "Grafo non disponibile")
+            return ToolResult(False, "", "Graph not available")
         try:
             nodes = reader._query(
                 "SELECT id, type, label, metadata FROM nodes "
@@ -278,112 +278,112 @@ class ArchimedeAgent:
         except Exception as e:
             return ToolResult(False, "", str(e))
 
-    # ── Dispatch dinamico ────────────────────────────────────────
+    # ── Dynamic dispatch ────────────────────────────────────────
 
     def dispatch(self, action: str, **params) -> ToolResult:
         """Dispatches to the appropriate tool method by name.
 
         Args:
-            action: Nome dell'azione (es. 'search_persons', 'get_graph_stats')
-            **params: Parametri da passare al metodo
+            action: Name of the action (e.g., 'search_persons', 'get_graph_stats')
+            **params: Parameters to pass to the method
 
         Returns:
-            ToolResult con i dati strutturati
+            ToolResult with structured data
         """
         method_name = f"tool_{action}"
         method = getattr(self, method_name, None)
         if method is None:
-            return ToolResult(False, "", f"Azione sconosciuta: '{action}'")
+            return ToolResult(False, "", f"Unknown action: '{action}'")
         try:
             logger.info("Archimede dispatch: %s(%s)", action, params)
             return method(**params)
         except TypeError as e:
-            return ToolResult(False, "", f"Parametri errati per '{action}': {e}")
+            return ToolResult(False, "", f"Wrong parameters for '{action}': {e}")
         except Exception as e:
-            logger.exception("Errore durante %s: %s", action, e)
+            logger.exception("Error during %s: %s", action, e)
             return ToolResult(False, "", str(e))
 
-    # ── Chat leggera (per API Archimede, senza LLM) ─────────────
+    # ── Lightweight chat (for Archimede API, no LLM) ─────────────
 
     def chat(self, message: str) -> str:
-        """Risponde a un messaggio in linguaggio naturale con pattern matching.
+        """Responds to a natural language message with pattern matching.
 
-        Metodo leggero per l'endpoint /archimede/chat.
-        NON usa un LLM: si basa su keyword matching per casi comuni.
-        Per funzionalità complete, usare l'orchestratore Oracle.
+        Lightweight method for the /archimede/chat endpoint.
+        Does NOT use an LLM: relies on keyword matching for common cases.
+        For full functionality, use the Oracle orchestrator.
         """
         msg_lower = message.lower()
 
-        # Mappa keyword → azione
-        if any(k in msg_lower for k in ["stat", "conteggio", "quante", "quanti", "quante foto"]):
+        # Map keyword → action
+        if any(k in msg_lower for k in ["stat", "count", "how many", "total", "stats", "statistiche", "conteggio", "quante"]):
             result = self.tool_get_graph_stats()
             if result.success:
                 d = result.data
                 return (
-                    f"Ecco le statistiche del grafo:\n"
-                    f"- 📸 Foto totali: {d.get('total_photos', 'N/A')}\n"
-                    f"- 👤 Persone: {d.get('total_persons', 'N/A')}\n"
-                    f"- 📁 Nodi: {sum(d.get('nodes_by_type', {}).values(), 0)}\n"
-                    f"- 🔗 Archi: {d.get('total_edges', 'N/A')}\n"
-                    f"- 📄 File: {d.get('total_files', 'N/A')}"
+                    f"Here are the graph statistics:\n"
+                    f"- 📸 Total photos: {d.get('total_photos', 'N/A')}\n"
+                    f"- 👤 People: {d.get('total_persons', 'N/A')}\n"
+                    f"- 📁 Nodes: {sum(d.get('nodes_by_type', {}).values(), 0)}\n"
+                    f"- 🔗 Edges: {d.get('total_edges', 'N/A')}\n"
+                    f"- 📄 Files: {d.get('total_files', 'N/A')}"
                 )
-            return "Non riesco a recuperare le statistiche del grafo."
+            return "Unable to retrieve graph statistics."
 
-        if any(k in msg_lower for k in ["person", "persone", "gente", "chi"]):
-            # Cerca persone per nome
-            # Estrai il nome dopo "cerca" o "trova"
-            name_match = re.search(r'(?:cerca|trova|dove\s+è|chi\s+è)\s+(.+)$', message, re.IGNORECASE)
+        if any(k in msg_lower for k in ["person", "people", "who", "persone", "gente", "chi"]):
+            # Search people by name
+            # Extract name after "search" or "find"
+            name_match = re.search(r'(?:search|find|cerca|trova|who\s+is|dove\s+è|chi\s+è)\s+(.+)$', message, re.IGNORECASE)
             query = name_match.group(1).strip() if name_match else ""
             if query:
                 result = self.tool_search_persons(query=query)
                 if result.success and result.data.get("count", 0) > 0:
                     names = [p["label"] for p in result.data["persons"]]
-                    return f"Ho trovato {len(names)} persone: " + ", ".join(names[:10])
-                return f"Non ho trovato persone con nome '{query}'."
+                    return f"I found {len(names)} people: " + ", ".join(names[:10])
+                return f"I didn't find anyone named '{query}'."
 
-        if any(k in msg_lower for k in ["foto", "photo", "immagine"]):
-            # Cerca foto di una persona
-            name_match = re.search(r'(?:foto|photo|immagine)\s+(?:di|con|del|della|delle?|dei?)\s+(.+)$', message, re.IGNORECASE)
+        if any(k in msg_lower for k in ["photo", "image", "picture", "foto", "immagine"]):
+            # Search photos of a person
+            name_match = re.search(r'(?:photo|image|picture|foto|immagine)\s+(?:of|with|di|con|del|della|delle?|dei?)\s+(.+)$', message, re.IGNORECASE)
             if name_match:
                 person_name = name_match.group(1).strip()
                 result = self.tool_get_person_photos(person_name=person_name, limit=5)
                 if result.success and result.data.get("count", 0) > 0:
                     files = [f.get("file_name", p.get("path", "?")) for p in result.data["photos"][:5]]
-                    return f"Ho trovato {result.data['count']} foto di {person_name}:\n" + "\n".join(f"  - {f}" for f in files)
-                return f"Non ho trovato foto di '{person_name}'."
+                    return f"I found {result.data['count']} photos of {person_name}:\n" + "\n".join(f"  - {f}" for f in files)
+                return f"I found no photos of '{person_name}'."
 
-        if any(k in msg_lower for k in ["event", "quando", "data"]):
+        if any(k in msg_lower for k in ["event", "when", "date", "quando", "data"]):
             result = self.tool_search_events(limit=10)
             if result.success and result.data.get("count", 0) > 0:
                 events = [f"{e['label']}" for e in result.data["events"][:10]]
-                return f"Ultimi {len(events)} eventi:\n" + "\n".join(f"  - {e}" for e in events)
-            return "Non ho trovato eventi nel grafo."
+                return f"Latest {len(events)} events:\n" + "\n".join(f"  - {e}" for e in events)
+            return "I found no events in the graph."
 
-        if any(k in msg_lower for k in ["luogo", "location", "dove", "posto"]):
+        if any(k in msg_lower for k in ["place", "location", "where", "luogo", "dove", "posto"]):
             result = self.tool_search_locations(limit=10)
             if result.success and result.data.get("count", 0) > 0:
                 locs = [l["label"] for l in result.data["locations"][:10]]
-                return f"Luoghi registrati ({len(locs)}):\n" + "\n".join(f"  - {l}" for l in locs)
-            return "Non ho trovato luoghi nel grafo."
+                return f"Registered locations ({len(locs)}):\n" + "\n".join(f"  - {l}" for l in locs)
+            return "I found no locations in the graph."
 
-        # Fallback: cerca nodi generici
+        # Fallback: search generic nodes
         result = self.tool_search_nodes(query=message, limit=5)
         if result.success and result.data.get("count", 0) > 0:
             nodes = [f"{n['type']}: {n['label']}" for n in result.data["nodes"][:5]]
-            return f"Ho trovato questi nodi nel grafo:\n" + "\n".join(f"  - {n}" for n in nodes)
+            return f"I found these nodes in the graph:\n" + "\n".join(f"  - {n}" for n in nodes)
 
         return (
-            "Non ho capito la richiesta. Prova con:\n"
-            "- 'quante foto ci sono?'\n"
-            "- 'cerca persone'\n"
-            "- 'foto di Angela'\n"
-            "- 'eventi recenti'\n"
-            "- 'luoghi'\n"
-            "- 'statistiche del grafo'"
+            "I didn't understand the request. Try:\n"
+            "- 'how many photos are there?'\n"
+            "- 'search people'\n"
+            "- 'photos of Angela'\n"
+            "- 'recent events'\n"
+            "- 'locations'\n"
+            "- 'graph statistics'"
         )
 
     def close(self):
-        """Chiude le connessioni."""
+        """Closes connections."""
         if self._reader:
             try:
                 self._reader.close()

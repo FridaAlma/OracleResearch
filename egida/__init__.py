@@ -1,22 +1,22 @@
 """
-Egida — Guardrail HSD (Highly Sensitive Data) — 4° strato di Oracle.
+Egida — HSD (Highly Sensitive Data) Guardrail — 4th layer of Oracle.
 
-Agisce a monte di TUTTI gli strati (Penelope, Archimede, Oracle):
-se un file contiene HSD con score >= soglia (default 90), viene
-isolato in quarantena e NON entra nel grafo.
+Acts upstream of ALL layers (Penelope, Archimede, Oracle):
+if a file contains HSD with score >= threshold (default 90), it is
+isolated in quarantine and does NOT enter the graph.
 
-Caratteristiche v2.0:
-  - Sistema di scoring/severity (CRITICAL=100, HIGH=90, MEDIUM=50, LOW=25, INFO=10)
-  - Magic byte detection per file binari (non solo estensione)
-  - Validazione JWT (header JSON decodificabile)
-  - Whitelist domini email fittizi (example.com, test.com, ...)
-  - Placeholder detection per password (type hint, nomi variabile, CI defaults)
-  - CAP con range validazione italiana (00100-98199) e anti-decimale
-  - Telefono con esclusione UUID e separatori obbligatori
-  - Esclusioni contestuali per righe con UUID/file-id
-  - Soglia quarantena configurabile via EGIDA_THRESHOLD
-  - NER con soglia di confidenza configurabile via EGIDA_NER_CONFIDENCE
-  - Indipendente da Penelope — importabile da qualsiasi strato
+Features v2.0:
+  - Scoring/severity system (CRITICAL=100, HIGH=90, MEDIUM=50, LOW=25, INFO=10)
+  - Magic byte detection for binary files (not just extension)
+  - JWT validation (decodable JSON header)
+  - Dummy email domain whitelist (example.com, test.com, ...)
+  - Placeholder detection for passwords (type hints, variable names, CI defaults)
+  - Postal code with Italian validation range (00100-98199) and anti-decimal
+  - Phone with UUID exclusion and mandatory separators
+  - Contextual exclusions for lines with UUID/file-id
+  - Configurable quarantine threshold via EGIDA_THRESHOLD
+  - NER with configurable confidence threshold via EGIDA_NER_CONFIDENCE
+  - Independent from Penelope — importable from any layer
 """
 
 from .filters import HSDMatch, HSDFilter, Severity, quick_scan

@@ -20,18 +20,18 @@ if "%~1"=="--help" goto help
 :: ─── Check Python ──────────────────────────────────────────────
 python --version >nul 2>&1
 if %ERRORLEVEL% neq 0 (
-    echo [ERRORE] Python non trovato. Assicurati di aver installato Python e che sia nel PATH.
-    echo         Scarica Python da: https://www.python.org/downloads/
+    echo [ERROR] Python not found. Make sure Python is installed and in PATH.
+    echo         Download Python from: https://www.python.org/downloads/
     pause
     exit /b 1
 )
 
 :: ─── Check .env ─────────────────────────────────────────────────
 if not exist ".env" (
-    echo [AVVISO] File .env non trovato.
-    echo          Copia .env.example in .env e configura la tua API key.
+    echo [WARNING] .env file not found.
+    echo          Copy .env.example to .env and configure your API key.
     echo.
-    choice /c CN /N /M "[C]ontinua comunque o [N]on uscire? (C/N) "
+    choice /c CN /N /M "[C]ontinue anyway or e[N]xit? (C/N) "
     if errorlevel 2 exit /b 1
 )
 
@@ -42,14 +42,14 @@ if "%MODE%"=="ui" goto ui_mode
 :cli_mode
 echo.
 echo  ^|  Oracle CLI - AI Coding Agent
-if "%MODEL_FLAG%"=="--deep" echo  ^|  Modalita' PRO (modello di fascia alta)
-echo  ^|  Scrivi 'exit' o premi Ctrl+C per uscire
+if "%MODEL_FLAG%"=="--deep" echo  ^|  PRO mode (high-tier model)
+echo  ^|  Type 'exit' or press Ctrl+C to quit
 echo.
 python cli.py %MODEL_FLAG%
 
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo [ERRORE] Oracle si e' chiuso con codice %ERRORLEVEL%
+    echo [ERROR] Oracle exited with code %ERRORLEVEL%
     pause
 )
 exit /b %ERRORLEVEL%
@@ -58,75 +58,75 @@ exit /b %ERRORLEVEL%
 :ui_mode
 echo.
 echo  ^|  Oracle - AI Coding Agent
-if "%MODEL_FLAG%"=="--deep" echo  ^|  Modalita' PRO (modello di fascia alta)
+if "%MODEL_FLAG%"=="--deep" echo  ^|  PRO mode (high-tier model)
 echo  ^|  http://localhost:%PORT%/ui
-echo  ^|  Premi Ctrl+C per fermare server e interfaccia
+echo  ^|  Press Ctrl+C to stop server and interface
 echo.
 
-:: Ferma eventuali server precedenti
+:: Kill any previous server instances
 taskkill /f /fi "WINDOWTITLE eq Oracle Server" >nul 2>&1
 timeout /t 1 /nobreak >nul
 
-:: Installa dipendenze mancanti (solo primo avvio)
+:: Install missing dependencies (first run only)
 pip install httpx fastapi uvicorn python-multipart -q 2>nul
 
-:: Avvia il server direttamente in questa finestra
-echo [OK] Server in avvio su http://localhost:%PORT% ...
+:: Start the server directly in this window
+echo [OK] Server starting on http://localhost:%PORT% ...
 echo.
 
-:: Apre il browser dopo 3 secondi (in background)
+:: Open browser after 3 seconds (in background)
 start "" /B cmd /c "timeout /t 3 /nobreak >nul && start http://localhost:%PORT%/ui" >nul 2>&1
 
-:: Avvia il server (bloccante - Ctrl+C per fermare)
+:: Start server (blocking - Ctrl+C to stop)
 python coding_agent.py --port %PORT% %MODEL_FLAG%
 
-:: ─── Cleanup (dopo Ctrl+C o chiusura) ───────────────────────────
+:: ─── Cleanup (after Ctrl+C or close) ───────────────────────────
 echo.
-echo Arresto in corso...
+echo Shutting down...
 
-:: Chiude le schede del browser aperte su localhost:%PORT%
-echo Chiusura interfaccia web...
+:: Close browser tabs open on localhost:%PORT%
+echo Closing web interface...
 powershell -NoProfile -Command "try { $w = (New-Object -ComObject Shell.Application).Windows(); $w | Where-Object { $_.LocationURL -like '*localhost:%PORT%*' } | ForEach-Object { $_.Quit(); Start-Sleep -Milliseconds 100 } } catch {}" >nul 2>&1
 
-:: Ferma eventuali processi rimasti
+:: Kill any remaining processes
 taskkill /f /fi "WINDOWTITLE eq Oracle Server" >nul 2>&1
 
-echo Server arrestato.
+echo Server stopped.
 echo.
-echo Grazie per aver usato Oracle!
+echo Thanks for using Oracle!
 timeout /t 2 /nobreak >nul
 exit /b 0
 
-:: ─── Stop Server (da un altro terminale) ───────────────────────
+:: ─── Stop Server (from another terminal) ───────────────────────
 :stop_server
-echo Fermo il server Oracle in esecuzione...
+echo Stopping Oracle server...
 taskkill /f /fi "WINDOWTITLE eq Oracle Server" >nul 2>&1
-echo Chiusura interfaccia web...
+echo Closing web interface...
 powershell -NoProfile -Command "try { $w = (New-Object -ComObject Shell.Application).Windows(); $w | Where-Object { $_.LocationURL -like '*localhost:*' } | ForEach-Object { $_.Quit(); Start-Sleep -Milliseconds 100 } } catch {}" >nul 2>&1
-echo Fatto.
+echo Done.
 exit /b 0
 
 :: ─── Help ───────────────────────────────────────────────────────
 :help
 echo Oracle - AI Coding Agent
 echo.
-echo Utilizzo:  oracle.bat [opzioni]
+echo Usage:  oracle.bat [options]
 echo.
-echo Opzioni:
-echo   --cli          Avvia l'interfaccia a riga di comando (CLI)
-echo   --ui           Avvia l'interfaccia web (default)
-echo   --deep, --pro  Usa il modello Pro (massima qualita')
-echo   --flash        Usa il modello Flash (economico, default)
-echo   --port PORT    Usa una porta specifica (default: 8000)
-echo   --stop         Ferma il server Oracle in esecuzione
-echo   --help         Mostra questo messaggio
+echo Options:
+echo   --cli          Start command-line interface (CLI)
+echo   --ui           Start web interface (default)
+echo   --deep, --pro  Use Pro model (maximum quality)
+echo   --flash        Use Flash model (economical, default)
+echo   --port PORT    Use specific port (default: 8000)
+echo   --stop         Stop running Oracle server
+echo   --help         Show this message
 echo.
-echo Esempi:
-echo   oracle.bat                  Avvia interfaccia web
-echo   oracle.bat --deep           Avvia con il modello Pro
-echo   oracle.bat --cli --deep     Avvia CLI con modello Pro
-echo   oracle.bat --port 8080      Avvia su porta 8080
-echo   oracle.bat --stop           Ferma il server in background
+echo Examples:
+echo   oracle.bat                  Start web interface
+echo   oracle.bat --deep           Start with Pro model
+echo   oracle.bat --cli --deep     Start CLI with Pro model
+echo   oracle.bat --port 8080      Start on port 8080
+echo   oracle.bat --stop           Stop background server
 echo.
 pause
 exit /b 0

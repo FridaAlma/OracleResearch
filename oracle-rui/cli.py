@@ -33,11 +33,11 @@ BRACKETED_PASTE_START = "\x1b[200~"
 BRACKETED_PASTE_END = "\x1b[201~"
 
 # ── Model tier ────────────────────────────────────────────────────
-_model_tier = "auto"  # default, può essere sovrascritto da --deep / --pro
+_model_tier = "auto"  # default, can be overridden by --deep / --pro
 
 
 def _resolve_agent(message: str = ""):
-    """Restituisce l'agente giusto in base al tier e al messaggio."""
+    """Returns the right agent based on tier and message."""
     if _model_tier == "pro":
         return coding_agent_pro
     if _model_tier == "flash":
@@ -46,10 +46,10 @@ def _resolve_agent(message: str = ""):
     prompt_tier = _detect_prompt_tier(message)
     if prompt_tier == "pro":
         provider = os.getenv("MODEL_PROVIDER", "openai")
-        print(f"  [Oracle] Task complesso -> Pro model + Full prompt ({provider})")
+        print(f"  [Oracle] Complex task -> Pro model + Full prompt ({provider})")
         return coding_agent_pro
     if prompt_tier == "lite":
-        print(f"  [Oracle] Task semplice -> Flash model + Lite prompt ({prompt_tier})")
+        print(f"  [Oracle] Simple task -> Flash model + Lite prompt ({prompt_tier})")
         return coding_agent
     print(f"  [Oracle] Task standard -> Flash model + Standard prompt")
     return coding_agent
@@ -129,10 +129,10 @@ def interactive():
     setup_bracketed_paste()
     provider = os.getenv("MODEL_PROVIDER", "openai").capitalize()
     tier_label = "PRO" if _model_tier == "pro" else "FLASH" if _model_tier == "flash" else "AUTO"
-    print(f"Oracle CLI - Ctrl+C o 'exit' per uscire  |  Provider: {provider} | Modello: {tier_label}")
+    print(f"Oracle CLI - Ctrl+C or 'exit' to quit  |  Provider: {provider} | Model: {tier_label}")
     if _model_tier == "auto":
-        print(f"  (auto: task complessi -> modello Pro ({provider}), semplici -> Flash)")
-    print("(Incolla testo su piu' righe con Ctrl+V - viene rilevato automaticamente)\n")
+        print(f"  (auto: complex tasks -> Pro model ({provider}), simple -> Flash)")
+    print("(Paste multi-line text with Ctrl+V - auto-detected)\n")
 
     while True:
         try:
@@ -180,11 +180,11 @@ if __name__ == "__main__":
     if "--deep" in sys.argv or "--pro" in sys.argv:
         _model_tier = "pro"
         provider = os.getenv("MODEL_PROVIDER", "openai").capitalize()
-        print(f"[Oracle] Modalita PRO forzata - modello Pro ({provider}) per tutti i task")
+        print(f"[Oracle] PRO mode forced - Pro model ({provider}) for all tasks")
     elif "--flash" in sys.argv:
         _model_tier = "flash"
         provider = os.getenv("MODEL_PROVIDER", "openai").capitalize()
-        print(f"[Oracle] Modalita FLASH forzata - modello Flash ({provider}) per tutti i task")
+        print(f"[Oracle] FLASH mode forced - Flash model ({provider}) for all tasks")
 
     if args:
         one_shot(" ".join(args))
