@@ -1,0 +1,1 @@
+"""Database layer: MariaDB store & NetworkX graph bridge."""

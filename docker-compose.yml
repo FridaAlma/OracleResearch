@@ -1,0 +1,40 @@
+# Oracle RUI Edition — Docker Compose per MariaDB
+# Avvia un database MariaDB locale per Penelope (grafo della conoscenza).
+#
+# Uso:
+#   docker-compose up -d          # Avvia MariaDB in background
+#   docker-compose down           # Arresta e rimuove il container
+#   docker-compose down -v        # Arresta e rimuove ANCHE i dati
+#
+# Dopo l'avvio, esegui lo schema:
+#   docker exec -i oracle-rui-mariadb mariadb -u root -poracle_rui_root penelope_rui < penelope/penelope/db/schema.sql
+#
+# Oppure connettiti con:
+#   docker exec -it oracle-rui-mariadb mariadb -u penelope -ppenelope_rui_pass penelope_rui
+
+version: "3.8"
+
+services:
+  mariadb:
+    image: mariadb:11
+    container_name: oracle-rui-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: oracle_rui_root
+      MARIADB_DATABASE: penelope_rui
+      MARIADB_USER: penelope
+      MARIADB_PASSWORD: penelope_rui_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./penelope/penelope/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mariadb_data:
+    driver: local

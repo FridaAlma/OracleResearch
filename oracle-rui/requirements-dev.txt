@@ -1,0 +1,15 @@
+# =============================================================================
+# Oracle - Development Requirements
+# Dipendenze per sviluppo e testing
+# Installare: pip install -r requirements-dev.txt
+# =============================================================================
+
+# Core requirements (must be installed first)
+-r requirements-core.txt
+
+# Optional requirements for full functionality
+-r requirements-optional.txt
+
+# =============================================================================
+# End of requirements-dev.txt
+# =============================================================================

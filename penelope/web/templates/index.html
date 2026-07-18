@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Penelope — Grafo della Conoscenza</title>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --teal: #56d4dd;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+  }
+  .header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100;
+  }
+  .header h1 { font-size: 18px; font-weight: 600; letter-spacing: 1px; }
+  .header h1 span { color: var(--accent); }
+  .header .subtitle { color: var(--text2); font-size: 12px; }
+  .header .live { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--green); }
+  .header .live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .nav { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; gap: 4px; }
+  .nav button {
+    background: none; border: none; color: var(--text2); padding: 10px 16px; cursor: pointer;
+    font-size: 13px; border-bottom: 2px solid transparent; transition: all .15s;
+  }
+  .nav button:hover { color: var(--text); background: var(--surface2); }
+  .nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .content { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; text-align: center; transition: transform .15s;
+  }
+  .stat-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .stat-card .val { font-size: 28px; font-weight: 700; color: var(--accent); }
+  .stat-card .lbl { font-size: 11px; color: var(--text2); margin-top: 4px; text-transform: uppercase; letter-spacing: .5px; }
+  .stat-card.green .val { color: var(--green); }
+  .stat-card.orange .val { color: var(--orange); }
+  .stat-card.purple .val { color: var(--purple); }
+  .stat-card.teal .val { color: var(--teal); }
+  .stat-card.red .val { color: var(--red); }
+  .quick-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .quick-item {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 14px; font-size: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .quick-item .num { font-weight: 700; font-size: 16px; color: var(--accent); }
+  .quick-item .label { color: var(--text2); }
+  #graph-container { width: 100%; height: 600px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .graph-tools { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .graph-tools select, .graph-tools input, .graph-tools button {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 12px; border-radius: 4px; font-size: 12px;
+  }
+  .graph-tools select { cursor: pointer; }
+  .graph-tools button { cursor: pointer; background: var(--surface2); }
+  .graph-tools button:hover { border-color: var(--accent); }
+  .graph-stats { display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: var(--text2); }
+  .node-filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .node-filters select, .node-filters input, .node-filters button {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 12px; border-radius: 4px; font-size: 12px;
+  }
+  .node-filters input { flex: 1; min-width: 200px; }
+  .node-filters button { cursor: pointer; background: var(--surface2); }
+  .node-filters button:hover { border-color: var(--accent); }
+  .node-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .node-table th { text-align: left; padding: 8px 10px; background: var(--surface2); color: var(--text2); font-weight: 500; border-bottom: 1px solid var(--border); }
+  .node-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .node-table tr:hover { background: var(--surface2); cursor: pointer; }
+  .type-badge { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+  .type-File { background: #1a3a5c; color: #58a6ff; }
+  .type-Person { background: #3d1a1a; color: #f85149; }
+  .type-Location { background: #1a3d1a; color: #3fb950; }
+  .type-Project { background: #3d2e1a; color: #d29922; }
+  .type-Event { background: #2d1a3d; color: #bc8cff; }
+  .pagination { display: flex; gap: 4px; margin-top: 12px; justify-content: center; align-items: center; }
+  .pagination button { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .pagination button:hover { border-color: var(--accent); }
+  .pagination button:disabled { opacity: .4; cursor: default; }
+  .pagination .info { font-size: 12px; color: var(--text2); margin: 0 12px; }
+  .detail-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.6); z-index: 200; align-items: center; justify-content: center; }
+  .detail-overlay.open { display: flex; }
+  .detail-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 90%; max-width: 700px; max-height: 85vh; overflow-y: auto; padding: 24px; position: relative; }
+  .detail-panel .close { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--text2); font-size: 22px; cursor: pointer; }
+  .detail-panel .close:hover { color: var(--text); }
+  .detail-panel h2 { margin-bottom: 4px; }
+  .detail-panel .subtitle { color: var(--text2); font-size: 12px; margin-bottom: 16px; }
+  .detail-panel .section { margin-top: 16px; }
+  .detail-panel .section h3 { font-size: 13px; color: var(--accent); margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  .detail-panel .meta-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12px; }
+  .detail-panel .meta-grid .key { color: var(--text2); }
+  .detail-panel .meta-grid .val { word-break: break-all; }
+  .detail-panel .edge-list { list-style: none; }
+  .detail-panel .edge-list li { padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 12px; display: flex; gap: 8px; align-items: center; }
+  .detail-panel .edge-list li:hover { background: var(--surface2); }
+  .detail-panel .edge-list .rel { color: var(--orange); font-weight: 600; }
+  .detail-panel pre { background: var(--surface2); padding: 8px; border-radius: 4px; font-size: 11px; overflow-x: auto; max-height: 200px; }
+  .face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .face-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; cursor: pointer; transition: border-color .15s;
+  }
+  .face-card:hover { border-color: var(--accent); }
+  .face-card .face-id { font-size: 10px; color: var(--text2); word-break: break-all; margin-bottom: 4px; }
+  .face-card .face-label { font-size: 13px; font-weight: 600; }
+  .face-card .face-meta { font-size: 11px; color: var(--text2); margin-top: 4px; }
+  .face-card .face-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; margin-top: 4px; }
+  .face-card .has-emb { background: #1a3d1a; color: var(--green); }
+  .face-card .no-emb { background: #3d1a1a; color: var(--red); }
+  .search-box { display: flex; gap: 8px; margin-bottom: 16px; }
+  .search-box input { flex: 1; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 6px; font-size: 14px; }
+  .search-box input:focus { outline: none; border-color: var(--accent); }
+  .search-box button { background: var(--accent); color: #000; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+  .search-box button:hover { opacity: .9; }
+  .search-results { display: flex; flex-direction: column; gap: 8px; }
+  .search-item {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .search-item .file-name { font-weight: 600; font-size: 13px; }
+  .search-item .file-type { font-size: 11px; color: var(--text2); }
+  .search-item .distance { font-size: 11px; color: var(--accent); }
+  .search-item .snippet { font-size: 11px; color: var(--text2); margin-top: 4px; max-width: 600px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .project-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .project-card h3 { font-size: 15px; margin-bottom: 4px; }
+  .project-card .proj-meta { font-size: 12px; color: var(--text2); }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .loading { text-align: center; padding: 40px; color: var(--text2); }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 768px) {
+    .content { padding: 12px; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .header h1 { font-size: 15px; }
+    .nav { padding: 0 12px; overflow-x: auto; }
+  }
+</style>
+</head><body>
+<div class="header">
+  <h1><span>PENELOPE</span> &middot; Grafo della Conoscenza</h1>
+  <div class="subtitle">Oracle &mdash; Ingestion &amp; Grafo</div>
+  <div class="live"><span class="dot"></span> Live</div>
+</div>
+<div class="nav" id="nav">
+  <button class="active" data-tab="dashboard">Dashboard</button>
+  <button data-tab="graph">Grafo</button>
+  <button data-tab="nodes">Nodi</button>
+  <button data-tab="faces">Volti</button>
+  <button data-tab="search">Ricerca</button>
+  <button data-tab="projects">Progetti</button>
+</div>
+<div class="content">
+<div class="tab active" id="tab-dashboard">
+  <div class="stats-grid" id="statsGrid"></div>
+  <div id="quickRow" class="quick-row"></div>
+</div>
+<div class="tab" id="tab-graph">
+  <div class="graph-tools">
+    <select id="graphFilterType"><option value="">Tutti i tipi</option><option value="File">File</option><option value="Person">Persona</option><option value="Location">Luogo</option><option value="Project">Progetto</option></select>
+    <select id="graphFilterRel"><option value="">Tutte le relazioni</option><option value="MEMBER_OF">MEMBER_OF</option><option value="MENTIONS">MENTIONS</option><option value="CONTAINS">CONTAINS</option></select>
+    <input type="text" id="graphSearch" placeholder="Cerca nel grafo..." style="flex:1;min-width:150px">
+    <button onclick="loadGraph()">⟳ Ricarica</button>
+    <button onclick="fitGraph()">⊞ Adatta</button>
+  </div>
+  <div id="graph-container"></div>
+  <div class="graph-stats" id="graphStats"></div>
+</div>
+<div class="tab" id="tab-nodes">
+  <div class="node-filters">
+    <select id="nodeTypeFilter"><option value="">Tutti i tipi</option><option value="File">File</option><option value="Person">Persona</option><option value="Location">Luogo</option><option value="Project">Progetto</option></select>
+    <input type="text" id="nodeSearch" placeholder="Cerca per nome o ID...">
+    <button onclick="loadNodes(0)">Cerca</button>
+  </div>
+  <div id="nodeTableContainer"></div>
+  <div class="pagination" id="nodePagination"></div>
+</div>
+<div class="tab" id="tab-faces">
+  <p style="color:var(--text2);font-size:13px;margin-bottom:12px">Tutti i nodi Persona rilevati nelle foto. Clicca per dettagli.</p>
+  <div id="faceGalleryContainer"></div>
+</div>
+<div class="tab" id="tab-search">
+  <div class="search-box">
+    <input type="text" id="searchQuery" placeholder="Cerca semanticamente (es. 'famiglia', 'lavoro', 'vacanze')" onkeydown="if(event.key==='Enter')doSearch()">
+    <button onclick="doSearch()">Cerca</button>
+  </div>
+  <div id="searchResults"></div>
+</div>
+<div class="tab" id="tab-projects">
+  <div id="projectGrid" class="project-grid"></div>
+</div>
+</div>
+<div class="detail-overlay" id="detailOverlay">
+  <div class="detail-panel">
+    <button class="close" onclick="closeDetail()">&times;</button>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<script>
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+async function api(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+// Navigation
+document.querySelectorAll('.nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'graph') loadGraph();
+    if (btn.dataset.tab === 'nodes') loadNodes(0);
+    if (btn.dataset.tab === 'faces') loadFaces();
+    if (btn.dataset.tab === 'projects') loadProjects();
+  });
+});
+
+// ─── DASHBOARD ─────────────────────────────
+async function loadDashboard() {
+  try {
+    const data = await api('/api/stats');
+    const grid = document.getElementById('statsGrid');
+    const cards = [
+      {val:data.total_nodes,lbl:'Nodi Totali',cls:''},
+      {val:data.nodes_by_type?.File||0,lbl:'File',cls:''},
+      {val:data.nodes_by_type?.Person||0,lbl:'Persone',cls:'red'},
+      {val:data.nodes_by_type?.Location||0,lbl:'Luoghi',cls:'green'},
+      {val:data.nodes_by_type?.Project||0,lbl:'Progetti',cls:'orange'},
+      {val:data.total_edges,lbl:'Archi Totali',cls:'purple'},
+      {val:data.edges_by_relation?.MEMBER_OF||0,lbl:'File in Progetti',cls:''},
+      {val:data.edges_by_relation?.MENTIONS||0,lbl:'Menzioni (NER)',cls:'teal'},
+      {val:data.edges_by_relation?.CONTAINS||0,lbl:'Volti Rilevati',cls:'red'},
+      {val:data.files_with_faces,lbl:'Immagini con Volti',cls:''},
+      {val:data.insightface_processed,lbl:'InsightFace',cls:''},
+      {val:data.persons_with_embeddings,lbl:'Con Embedding',cls:'green'},
+      {val:data.chroma_text,lbl:'ChromaDB Testo',cls:'teal'},
+      {val:data.chroma_images,lbl:'ChromaDB Immagini',cls:'teal'},
+      {val:data.embedding_files,lbl:'File .npy',cls:'purple'},
+      {val:data.total_files,lbl:'File Registry',cls:''},
+    ];
+    grid.innerHTML = cards.map(c => `<div class="stat-card ${c.cls}"><div class="val">${c.val}</div><div class="lbl">${c.lbl}</div></div>`).join('');
+    const qr = document.getElementById('quickRow');
+    const edges = data.edges_by_relation||{};
+    qr.innerHTML = Object.entries(edges).map(([k,v]) => `<div class="quick-item"><span class="num">${v}</span><span class="label">${k}</span></div>`).join('');
+  } catch(e) {
+    document.getElementById('statsGrid').innerHTML = `<div class="loading">Errore: ${e.message}</div>`;
+  }
+}
+
+// ─── GRAPH ────────────────────────────────
+let graphNetwork = null;
+async function loadGraph() {
+  const container = document.getElementById('graph-container');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento grafo...</div>';
+  try {
+    const data = await api('/api/graph?refresh=1');
+    const filterType = document.getElementById('graphFilterType').value;
+    const filterRel = document.getElementById('graphFilterRel').value;
+    const search = document.getElementById('graphSearch').value.toLowerCase();
+    let nodes = data.nodes, edges = data.edges;
+    if (filterType) nodes = nodes.filter(n => n.group === filterType);
+    if (filterRel) edges = edges.filter(e => e.label === filterRel);
+    if (search) {
+      const m = new Set(nodes.filter(n => n.label.toLowerCase().includes(search)||n.id.includes(search)).map(n => n.id));
+      nodes = nodes.filter(n => m.has(n.id));
+      edges = edges.filter(e => m.has(e.from) && m.has(e.to));
+    }
+    const options = {
+      nodes: { font: { color:'#e6edf3', size:12 }, borderWidth:1, scaling:{min:8,max:25} },
+      edges: { font: { size:10, color:'#8b949e', strokeWidth:0 }, width:1, smooth:{type:'continuous'} },
+      physics: { solver:'forceAtlas2Based', forceAtlas2Based:{gravitationalConstant:-40,centralGravity:.005,springLength:150,springConstant:.02}, stabilization:{iterations:100} },
+      interaction: { hover:true, tooltipDelay:200, navigationButtons:true, keyboard:true },
+      groups: {
+        File: { color:{background:'#3498db',border:'#2980b9'}, shape:'box' },
+        Person: { color:{background:'#e74c3c',border:'#c0392b'}, shape:'dot', size:20 },
+        Location: { color:{background:'#2ecc71',border:'#27ae60'}, shape:'triangle' },
+        Project: { color:{background:'#f39c12',border:'#d68910'}, shape:'star', size:25 },
+      },
+    };
+    if (graphNetwork) graphNetwork.destroy();
+    graphNetwork = new vis.Network(container, { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) }, options);
+    graphNetwork.on('click', function(params) { if (params.nodes.length>0) openDetail(params.nodes[0]); });
+    document.getElementById('graphStats').innerHTML = `Nodi: ${nodes.length} | Archi: ${edges.length} | Filtri: ${filterType||'tutti'} / ${filterRel||'tutte'}`;
+  } catch(e) { container.innerHTML = `<div class="loading">Errore: ${e.message}</div>`; }
+}
+function fitGraph() { if (graphNetwork) graphNetwork.fit(); }
+
+// ─── NODI ─────────────────────────────────
+let currentNodeOffset = 0;
+async function loadNodes(offset) {
+  currentNodeOffset = offset;
+  const type = document.getElementById('nodeTypeFilter').value;
+  const search = document.getElementById('nodeSearch').value;
+  const container = document.getElementById('nodeTableContainer');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const data = await api(`/api/nodes?type=${encodeURIComponent(type)}&search=${encodeURIComponent(search)}&limit=100&offset=${offset}`);
+    if (data.nodes.length===0) { container.innerHTML = '<p style="color:var(--text2);text-align:center;padding:40px">Nessun nodo trovato.</p>'; document.getElementById('nodePagination').innerHTML=''; return; }
+    let html = '<table class="node-table"><thead><tr><th>Tipo</th><th>Nome</th><th>ID</th><th>Percorso</th><th>Creato</th></tr></thead><tbody>';
+    data.nodes.forEach(n => {
+      const path = n.path||'';
+      html += `<tr onclick="openDetail('${n.id}')">
+        <td><span class="type-badge type-${n.type}">${n.type}</span></td>
+        <td>${escapeHtml(n.label||n.id.slice(0,12))}</td>
+        <td style="font-size:10px;color:var(--text2)">${n.id.slice(0,12)}...</td>
+        <td style="font-size:10px;color:var(--text2);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(path)}</td>
+        <td style="font-size:10px;color:var(--text2)">${n.created_at?n.created_at.slice(0,10):''}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    const totalPages = Math.ceil(data.total/100);
+    const currPage = Math.floor(offset/100)+1;
+    let pg = `<button onclick="loadNodes(0)" ${offset===0?'disabled':''}>&laquo;</button>
+              <button onclick="loadNodes(${Math.max(0,offset-100)})" ${offset===0?'disabled':''}>&lsaquo;</button>
+              <span class="info">Pagina ${currPage} di ${totalPages} (${data.total} nodi)</span>
+              <button onclick="loadNodes(${offset+100})" ${offset+100>=data.total?'disabled':''}>&rsaquo;</button>
+              <button onclick="loadNodes(${Math.max(0,totalPages-1)*100})" ${offset+100>=data.total?'disabled':''}>&raquo;</button>`;
+    document.getElementById('nodePagination').innerHTML = pg;
+  } catch(e) { container.innerHTML = `<div class="loading">Errore: ${e.message}</div>`; }
+}
+
+// ─── FACCES ───────────────────────────────
+async function loadFaces() {
+  const container = document.getElementById('faceGalleryContainer');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento volti...</div>';
+  try {
+    const data = await api('/api/faces?limit=200');
+    if (data.faces.length===0) { container.innerHTML = '<p style="color:var(--text2);text-align:center;padding:40px">Nessun volto trovato.</p>'; return; }
+    let html = `<p style="color:var(--text2);font-size:12px;margin-bottom:8px">Mostrati ${data.faces.length} di ${data.total} volti</p><div class="face-grid">`;
+    data.faces.forEach(f => {
+      const label = f.label||f.id.slice(0,16);
+      const path = f.file_path||'';
+      const source = f.source||'yolo';
+      const score = f.det_score ? f.det_score.toFixed(3) : '?';
+      html += `<div class="face-card" onclick="openDetail('${f.id}')">
+        <div class="face-id">${f.id.slice(0,20)}...</div>
+        <div class="face-label">${escapeHtml(label)}</div>
+        <div class="face-meta">${source} &middot; score: ${score}${f.gender!==undefined?' &middot; '+(f.gender===1?'M':'F'):''}${f.age?' &middot; età '+f.age:''}</div>
+        <div class="face-meta" style="font-size:10px">${escapeHtml(path.slice(0,60))}</div>
+        <span class="face-badge ${f.has_embedding?'has-emb':'no-emb'}">${f.has_embedding?'⚡ Embedding':'—'}</span>
+      </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  } catch(e) { container.innerHTML = `<div class="loading">Errore: ${e.message}</div>`; }
+}
+
+// ─── SEARCH ───────────────────────────────
+async function doSearch() {
+  const q = document.getElementById('searchQuery').value.trim();
+  if (!q) return;
+  const container = document.getElementById('searchResults');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div>Cercando...</div>';
+  try {
+    const data = await api('/api/search?q='+encodeURIComponent(q)+'&top=30');
+    if (data.results.length===0) { container.innerHTML = '<p style="color:var(--text2);padding:20px">Nessun risultato.</p>'; return; }
+    let html = '';
+    data.results.forEach(r => {
+      const isImage = r.mime_type && r.mime_type.startsWith('image/');
+      const fileLabel = escapeHtml(r.file_name || (r.node_id ? r.node_id.slice(0,16) : '?'));
+      html += `<div class="search-item">
+        <div style="display:flex;align-items:center;gap:12px;flex:1">
+          ${isImage && r.file_path ? `<div style="flex-shrink:0;width:80px;height:60px;border-radius:4px;overflow:hidden;background:var(--surface2);display:flex;align-items:center;justify-content:center;">
+            <img src="/api/images/${r.node_id}" style="max-width:100%;max-height:100%;object-fit:cover" loading="lazy" onerror="this.parentElement.textContent='📷'">
+          </div>` : ''}
+          <div style="flex:1;min-width:0">
+            <div class="file-name" style="font-size:13px">${fileLabel}</div>
+            <div class="file-type">${escapeHtml(r.mime_type||'')}</div>
+            ${r.snippet ? `<div class="snippet">${escapeHtml(r.snippet.slice(0,200))}</div>` : ''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:12px">
+          <div class="distance">${(1-(r.distance||0)).toFixed(3)}</div>
+        </div>
+      </div>`;
+    });
+    container.innerHTML = html;
+  } catch(e) { container.innerHTML = `<div class="loading">Errore: ${e.message}</div>`; }
+}
+
+// ─── PROJECTS ─────────────────────────────
+async function loadProjects() {
+  const container = document.getElementById('projectGrid');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const data = await api('/api/projects');
+    if (data.projects.length===0) { container.innerHTML = '<p style="color:var(--text2);padding:20px">Nessun progetto.</p>'; return; }
+    let html = '';
+    data.projects.forEach(p => {
+      html += `<div class="project-card" onclick="loadNodes(0,document.getElementById('nodeTypeFilter').value='Project',document.getElementById('nodeSearch').value='${escapeHtml(p.label)}')" style="cursor:pointer">
+        <h3>${escapeHtml(p.label)}</h3>
+        <div class="proj-meta">ID: ${p.id.slice(0,12)}...</div>
+        <div class="proj-meta">File: ${p.file_count}</div>
+        ${p.path ? `<div class="proj-meta">Percorso: ${escapeHtml(p.path)}</div>` : ''}
+        ${p.device ? `<div class="proj-meta">Dispositivo: ${escapeHtml(p.device)}</div>` : ''}
+      </div>`;
+    });
+    container.innerHTML = html;
+  } catch(e) { container.innerHTML = `<div class="loading">Errore: ${e.message}</div>`; }
+}
+
+// ─── DETAIL ───────────────────────────────
+async function openDetail(nodeId) {
+  const overlay = document.getElementById('detailOverlay');
+  const content = document.getElementById('detailContent');
+  overlay.classList.add('open');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  try {
+    const data = await api(`/api/nodes/${nodeId}`);
+    const n = data.node;
+    const meta = n.metadata||{};
+    const file = n.file||{};
+    let html = `<h2>${escapeHtml(n.label||n.id.slice(0,16))} <span class="type-badge type-${n.type}">${n.type}</span></h2>
+      <div class="subtitle">ID: ${n.id}</div>`;
+    // Metadati nodo
+    html += '<div class="section"><h3>Metadati</h3><div class="meta-grid">';
+    if (file.path) { html += `<span class="key">Percorso</span><span class="val">${escapeHtml(file.path)}</span>`; }
+    if (file.device) { html += `<span class="key">Dispositivo</span><span class="val">${escapeHtml(file.device)}</span>`; }
+    if (file.mime_type) { html += `<span class="key">MIME</span><span class="val">${escapeHtml(file.mime_type)}</span>`; }
+    if (file.size_bytes) { html += `<span class="key">Dimensione</span><span class="val">${(file.size_bytes/1024).toFixed(1)} KB</span>`; }
+    if (file.sha256) { html += `<span class="key">SHA-256</span><span class="val" style="font-size:10px">${file.sha256}</span>`; }
+    html += `<span class="key">Creato</span><span class="val">${n.created_at||'?'}</span>`;
+    if (n.updated_at) html += `<span class="key">Aggiornato</span><span class="val">${n.updated_at}</span>`;
+    html += '</div></div>';
+    // Face
+    if (n.type==='Person') {
+      html += '<div class="section"><h3>Face Recognition</h3><div class="meta-grid">';
+      if (meta.face_id) html += `<span class="key">Face ID</span><span class="val">${meta.face_id}</span>`;
+      if (meta.det_score) html += `<span class="key">Confidenza</span><span class="val">${meta.det_score.toFixed(3)}</span>`;
+      if (meta.gender!==undefined) html += `<span class="key">Genere</span><span class="val">${meta.gender===1?'M':'F'}</span>`;
+      if (meta.age) html += `<span class="key">Et&agrave;</span><span class="val">${meta.age}</span>`;
+      if (meta.source) html += `<span class="key">Fonte</span><span class="val">${meta.source}</span>`;
+      if (meta.rectangle) html += `<span class="key">BBox</span><span class="val">${JSON.stringify(meta.rectangle)}</span>`;
+      if (n.embedding) html += `<span class="key">Embedding</span><span class="val">${n.embedding.dim} dim (norma: ${n.embedding.norm.toFixed(3)})</span>`;
+      html += '</div></div>';
+    }
+    // File details
+    if (n.type==='File') {
+      html += '<div class="section"><h3>Dettagli File</h3><div class="meta-grid">';
+      if (meta.extension) html += `<span class="key">Estensione</span><span class="val">${meta.extension}</span>`;
+      if (meta.mime_type) html += `<span class="key">MIME</span><span class="val">${meta.mime_type}</span>`;
+      if (meta.face_count) html += `<span class="key">Volti</span><span class="val">${meta.face_count}</span>`;
+      if (meta.date_taken) html += `<span class="key">Data scatto</span><span class="val">${meta.date_taken}</span>`;
+      if (meta.camera_make) html += `<span class="key">Camera</span><span class="val">${meta.camera_make} ${meta.camera_model||''}</span>`;
+      if (meta.gps_lat&&meta.gps_lon) html += `<span class="key">GPS</span><span class="val">${meta.gps_lat}, ${meta.gps_lon}</span>`;
+      if (meta.has_faces) html += `<span class="key">has_faces</span><span class="val">${meta.has_faces}</span>`;
+      html += '</div></div>';
+    }
+    // Archi entranti
+    if (data.incoming.length>0) {
+      html += `<div class="section"><h3>Archi Entranti (${data.incoming.length})</h3><ul class="edge-list">`;
+      data.incoming.slice(0,20).forEach(e => {
+        html += `<li><span class="rel">${e.relation}</span> da <a onclick="openDetail('${e.source_id}')" style="cursor:pointer;color:var(--accent)">${escapeHtml(e.source_label||e.source_id.slice(0,12))}</a> <span style="color:var(--text2);font-size:10px">(${e.source_type})</span></li>`;
+      });
+      html += '</ul></div>';
+    }
+    // Archi uscenti
+    if (data.outgoing.length>0) {
+      html += `<div class="section"><h3>Archi Uscenti (${data.outgoing.length})</h3><ul class="edge-list">`;
+      data.outgoing.slice(0,20).forEach(e => {
+        html += `<li><span class="rel">${e.relation}</span> verso <a onclick="openDetail('${e.target_id}')" style="cursor:pointer;color:var(--accent)">${escapeHtml(e.target_label||e.target_id.slice(0,12))}</a> <span style="color:var(--text2);font-size:10px">(${e.target_type})</span></li>`;
+      });
+      html += '</ul></div>';
+    }
+    // Metadata raw
+    if (Object.keys(meta).length>0) {
+      html += `<div class="section"><h3>Metadata JSON</h3><pre>${escapeHtml(JSON.stringify(meta,null,2))}</pre></div>`;
+    }
+    content.innerHTML = html;
+  } catch(e) { content.innerHTML = `<div class="loading">Errore: ${e.message}</div>`; }
+}
+function closeDetail() { document.getElementById('detailOverlay').classList.remove('open'); }
+function loadNodes(offset, setType, setSearch) {
+  if (setType) document.getElementById('nodeTypeFilter').value = setType;
+  if (setSearch) document.getElementById('nodeSearch').value = setSearch;
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-tab="nodes"]').classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-nodes').classList.add('active');
+  loadNodes(offset);
+}
+
+// ─── INIT ─────────────────────────────────
+loadDashboard();
+</script>
+</body>
+</html>

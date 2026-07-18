@@ -1,0 +1,49 @@
+# =============================================================================
+# Oracle - Core Requirements
+# Dipendenze essenziali per il funzionamento base dell'agente
+# =============================================================================
+
+# Framework agente AI
+agno==2.6.4
+
+# HTTP Client
+httpx>=0.28.1,<0.30.0
+
+# Server ASGI
+uvicorn>=0.40.0,<0.41.0
+
+# FastAPI
+fastapi>=0.100.0,<0.101.0
+
+# OpenAI Client
+openai>=1.0.0,<2.0.0
+
+# Database ORM
+sqlalchemy>=2.0.0,<3.0.0
+
+# SQLite asincrono
+aiosqlite>=0.19.0,<0.20.0
+
+# Environment variables
+python-dotenv>=1.1.1,<2.0.0
+
+# -----------------------------------------------------------------------------
+# Security & Authentication (included in core for basic functionality)
+# -----------------------------------------------------------------------------
+# JWT token handling
+python-jose>=3.3.0,<4.0.0
+# Password hashing
+passlib>=1.7.4,<2.0.0
+bcrypt>=4.0.0,<5.0.0
+# Rate limiting
+slowapi>=0.1.8,<1.0.0
+
+# JSON handling (included in Python stdlib, but explicit for clarity)
+# json>=2.0.0
+
+# Path handling (included in Python stdlib)
+# pathlib>=1.0.0
+
+# =============================================================================
+# End of requirements-core.txt
+# =============================================================================

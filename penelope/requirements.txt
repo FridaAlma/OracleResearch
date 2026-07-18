@@ -1,0 +1,38 @@
+# Penelope — Fase 1: scheletro meccanico
+# Install: pip install -r requirements.txt
+
+# Database
+pymysql>=1.1.0
+cryptography>=41.0.0
+
+# Grafo
+networkx>=3.1
+
+# Filesystem
+watchdog>=3.0.0
+
+# HSD detection
+spacy>=3.7.0
+
+# Utility
+python-magic>=0.4.27
+python-dotenv>=1.0.0
+keyring>=24.0.0
+keyrings.alt>=5.0.0  # fallback per Linux senza secret service
+
+# Fase 1.5 — Embedding & AI leggera
+chromadb>=0.4.22
+sentence-transformers>=2.2.0
+Pillow>=10.0.0
+
+# (Opzionale) Scene detection video
+# scenedetect>=0.6.2
+
+# (Opzionale) Face detection
+# opencv-python-headless>=4.8.0
+
+# Fase 1.5 — CLIP image embedding (per ricerca cross-modale)
+open-clip-torch>=2.24.0
+
+# Fase 1.5 — DBSCAN clustering (per face clustering su larga scala)
+scikit-learn>=1.3.0

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=69.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "archimede"
+version = "0.2.0"
+description = "Oracle — Agente passivo di lettura, navigazione e identity resolution per il grafo Penelope"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+
+dependencies = [
+    "opencv-python>=4.9",
+    "numpy>=1.24",
+    "pymysql>=1.1",
+    "chromadb>=0.5",
+    "python-dotenv>=1.0",
+    "insightface>=0.7",
+    "onnxruntime>=1.17",
+]
+
+[project.scripts]
+archimede = "archimede.query:main"
+
+[tool.setuptools.packages.find]
+include = ["archimede*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
